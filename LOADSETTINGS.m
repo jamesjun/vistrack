@@ -4,5 +4,5 @@ try
         eval(csSettings{i});
     end
 catch
-    eval('settings');
+    eval('settings_vistrack');
 end

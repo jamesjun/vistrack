@@ -4,11 +4,12 @@
 % dname = '/Users/junj10/Desktop/None group learning/';
 %dname = '/Users/junj10/Desktop/2013b_RandomNarrow_complete/';
 
-mode = 'none';
+mode = 'random';
 
 switch lower(mode)
     case 'random'
-        dname = '/Users/junj10/Desktop/2013b_Random_complete/';
+%         dname = '/Users/junj10/Desktop/2013b_Random_complete/';
+        dname = 'D:\Dropbox\Ms16_cue learning\vistrack\';
         outfname = 'D141026_RandGroup';
     case 'none'
         dname = '/Users/junj10/Desktop/None group learning/';

@@ -1,0 +1,4 @@
+Visual Tracker (vistrack) change log
+  James Jun, Maler Lab, 2018/7/10
+
+[v0.1.1]

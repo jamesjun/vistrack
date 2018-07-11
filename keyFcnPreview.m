@@ -12,18 +12,25 @@ nFrames = size(handles.MOV,3);
 [~, vcDataID, ~] = fileparts(handles.vidFname);
 [iFrame, hObject] = deal(S.iFrame, S.hObject);
 switch lower(event.Key)
+    case 'h' %help
+        csHelp = {'SPACE: start and stop', 'LEFT/RIGHT: backward/forward', ...
+            'HOME/END: start/end', 'F: Flip head/tail', ...
+            'UP/DOWN: Speed up/down', 'C: Trim video'};
+        msgbox(csHelp);
+        
     case 'space'  % toggle start and stop  
         if fRunning, stop(timer1);
         else start(timer1); end
     
-    case {'leftarrow', 'rightarrow', 'f'}
+    case {'leftarrow', 'rightarrow', 'f', 'home', 'end'}
     %'f' for flip, 'left' for back, 'right' for forward
         if fRunning, stop(timer1); end
         switch event.Key
             case 'leftarrow', S.iFrame = max(1, S.iFrame-S.REPLAY_STEP);
             case 'rightarrow', S.iFrame = min(nFrames, S.iFrame+S.REPLAY_STEP);
-            case 'f' % flip orientation
-                GUI_FLIP;
+            case 'home', S.iFrame = 1;
+            case 'end', S.iFrame = nFrames;
+            case 'f', GUI_FLIP; %flip orientation
         end  
         set(S.hImg, 'CData', imadjust(handles.MOV(:,:,S.iFrame)));
         

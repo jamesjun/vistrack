@@ -63,7 +63,8 @@ disp('saved');
 %%
 %vcPooledFname = 'D140324_LandmarkGroup'; vrColor = 'b';
 %vcPooledFname = 'D141026_NoneGroup'; vrColor = 'g';
-sevcPooledFname = 'D141026_RandGroup'; vrColor = 'r';
+vcPooledFname = 'D141026_RandGroup'; vrColor = 'r';
+% vcPooledFname = 'D141026_RandWideGroup'; vrColor = 'm';
 
 load(vcPooledFname);
 
@@ -156,6 +157,7 @@ vrDurMed = [];  vrDurSd = [];  vrDur_L = [];   vrDur_H = [];
 mrPath = zeros(nSessions, 16);
 mrDur = zeros(nSessions, 16);
 for iSession=1:nSessions
+    try
     idxRng = (1:4) + (iSession-1)*4;
     vrPath = [vrPathLen_A(idxRng), vrPathLen_B(idxRng), vrPathLen_C(idxRng), vrPathLen_D(idxRng)];
     vrDur = [vrDuration_A(idxRng), vrDuration_B(idxRng), vrDuration_C(idxRng), vrDuration_D(idxRng)];
@@ -171,26 +173,30 @@ for iSession=1:nSessions
     vrDur_H(end+1) = a(2);
     mrPath(iSession, :) = vrPath;
     mrDur(iSession, :) = vrDur;
+    catch
+    end
 end
 
-% add boot strap sampling?
+%% add boot strap sampling?
+nSessions = (numel(vrPathMed));
+
 figure;
 subplot 221; 
 %errorbar(1:nSessions, vrPathMed, vrPath_L, vrPath_H); 
-plot(1:nSessions, vrPathMed, vrColor); 
-ylabel('Path Length (cm)'); xlabel('Session #'); axis([.5 (nSessions+.5) 0 2000]);
+plot(1:nSessions, vrPathMed/100, vrColor); grid on;
+ylabel('Path Length (m)'); xlabel('Session #'); axis([.5 (nSessions+.5) 0 20]);
 
 subplot 222; 
 %errorbar(1:nSessions, vrDurMu, vrDur_L, vrDur_H); 
-plot(1:nSessions, vrDurMed, vrColor); 
+plot(1:nSessions, vrDurMed, vrColor); grid on;
 ylabel('Duration (s)'); xlabel('Session #'); axis([.5 (nSessions+.5) 0 200]);
 
 subplot 223; 
-plot(1:nSessions, vrPathSd, vrColor); 
+plot(1:nSessions, vrPathSd, vrColor); grid on;
 ylabel('SD Path Length (cm)'); xlabel('Session #'); axis([.5 (nSessions+.5) 0 2500]);
 
 subplot 224; 
-plot(1:nSessions, vrDurSd, vrColor); 
+plot(1:nSessions, vrDurSd, vrColor); grid on;
 ylabel('SD Duration (s)'); xlabel('Session #'); axis([.5 (nSessions+.5) 0 250]);
 
 

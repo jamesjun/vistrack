@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 02-Sep-2017 11:06:12
+% Last Modified by GUIDE v2.5 10-Jul-2018 21:12:28
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -56,8 +56,11 @@ function GUI_OpeningFcn(hObject, eventdata, handles, varargin)
 handles.output = hObject;
 
 % Update settings window
-csSettings = importdata('settings.m', '\n');
+csSettings = importdata('settings_vistrack.m', '\n');
 set(handles.editSettings, 'String', csSettings);
+
+[vcVer, vcVer_date] = version_();
+set(handles.textVer, 'String', sprintf('%s (%s) James Jun', vcVer, vcVer_date));
 
 % Update handles structure
 guidata(hObject, handles);
@@ -115,6 +118,29 @@ if exist(vidFname, 'file') ~= 2
     vidFname = fullfile(PathName, FileName);
 end
 handles.vidFname = vidFname;
+
+% Set result field
+vcFile_out = subsFileExt_(vidFname, '_Track.mat');
+if exist_file_(vcFile_out)
+    set(handles.editResultFile, 'String', vcFile_out);
+    if ask_user_('Load previous tracking result?')
+        try
+            btnLoadPrev_Callback(handles.btnLoadPrev, eventdata, handles);
+            set(handles.btnSync, 'Enable', 'off');
+            set(handles.btnBackground, 'Enable', 'off');
+            set(handles.btnTrack, 'Enable', 'off');
+            set(handles.btnPreview, 'Enable', 'off');
+            set(handles.btnSave, 'Enable', 'off');
+            set(handles.panelPlot, 'Visible', 'on');  
+            return;
+        catch
+            msgbox('Loading tracking result failed');
+        end
+    end
+else
+    set(handles.editResultFile, 'String', '');
+end
+
 try        
     set(handles.edit1, 'String', handles.vidFname);
     h = msgbox('Loading... (this will close automatically)');
@@ -130,22 +156,20 @@ try
     msgstr = 'Video';
     % set the ADC file and ADC timestamp paths
 %     [PathName, fname, ~] = fileparts(vidFname);
-    handles.ADCfile = strrep(vidFname, '.wmv', '_Rs.mat');
-    handles.ADCfileTs = strrep(vidFname, '.wmv', '_Ts.mat');
-    set(handles.editADCfile, 'String', handles.ADCfile);
-    set(handles.editADCfileTs, 'String', handles.ADCfileTs);        
-    try 
-        handles.ADC = load(handles.ADCfile);
-        msgstr = [msgstr, ', ADC_Rs'];
-    catch
-        errordlg('ADC_Rs load error'); 
-    end
-    try 
-        handles.ADCTS = load(handles.ADCfileTs);
-        msgstr = [msgstr, ', ADC_Ts'];
-    catch
-        errordlg('ADC_Ts load error'); 
-    end
+    
+    % set timestamps if exists
+    vcFile_Rs = strrep(vidFname, '.wmv', '_Rs.mat');
+    if ~exist_file_(vcFile_Rs), vcFile_Rs = ''; end
+    handles.ADCfile = vcFile_Rs;
+    set(handles.editADCfile, 'String', vcFile_Rs);
+    handles.ADC = try_load_(handles.ADCfile);
+
+    vcFile_Ts = strrep(vidFname, '.wmv', '_Ts.mat');    
+    if ~exist_file_(vcFile_Ts), vcFile_Ts = ''; end
+    handles.ADCfileTs = vcFile_Ts;
+    set(handles.editADCfileTs, 'String', vcFile_Ts);   
+    handles.ADCTS = try_load_(handles.ADCfileTs);
+    
     guidata(hObject, handles);
     msgbox([msgstr ' file(s) loaded']);  
 catch
@@ -359,8 +383,12 @@ function btnSync_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 LOADSETTINGS;
-handles.xyLED = xyLED;
 vidobj = handles.vidobj;
+try
+    handles.xyLED = xyLED;
+catch
+    handles.xyLED = round([vidobj.height, vidobj.width]/2);
+end
 if ~exist('FPS0', 'var'), FPS0 = get(vidobj, 'FrameRate'); end
 ADCTC = load(get(handles.editADCfileTs, 'String'));
 disp_adc_title_(ADCTC);
@@ -582,7 +610,7 @@ function pushbutton9_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbutton9 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-writeText('settings.m', get(handles.editSettings, 'String'));
+writeText('settings_vistrack.m', get(handles.editSettings, 'String'));
 handles.csSettings = get(handles.editSettings, 'String');
 guidata(hObject, handles);
 
@@ -1011,6 +1039,7 @@ try
     %   resultFile = fullfile(PathName, FileName);
     set(handles.editResultFile, 'String', resultFile);
     h = msgbox('Loading... (this will close automatically)');
+    warning off;
     S = load(resultFile);
     try close(h); catch, end;        
 
@@ -1093,7 +1122,7 @@ mrYC = bsxfun(@minus, handles.YC, handles.YC_off);
 %setup fig
 timer1 = timer('Period', 1/15, 'ExecutionMode', 'fixedRate', 'TasksToExecute', inf);
 hFig = figure('NumberTitle', 'off', 'Name', ...
-    'LEFT: back; RIGHT: forward; UP: faster; DOWN: slower; SPACEBAR: pause; F: flip; C: cut upto here');
+    '[H]elp; [L/R/U/D]; SPACEBAR:Pause; [F]lip; [C]ut upto here');
 hImg = imshow(imadjust(MOV(:,:,1))); hold on;
 iFrame = 1;
 XC = mrXC(iFrame,:);
@@ -1164,3 +1193,101 @@ cellfun(@(vc)fprintf('\t%s: %s (%0.3f-%0.3fs)\n', ...
     vc, S_adc.(vc).title, S_adc.(vc).times(1), S_adc.(vc).times(end)), ...
         fieldnames(S_adc));
 fprintf('\n');
+
+
+%--------------------------------------------------------------------------
+% 9/26/17 JJJ: Created and tested
+function flag = exist_file_(vcFile)
+if nargin<2, fVerbose = 0; end
+if isempty(vcFile)
+    flag = 0; 
+else
+    flag = ~isempty(dir(vcFile));
+end
+if fVerbose && ~flag
+    fprintf(2, 'File does not exist: %s\n', vcFile);
+end
+
+
+%--------------------------------------------------------------------------
+% 8/2/17 JJJ: added '.' if dir is empty
+% 7/31/17 JJJ: Substitute file extension
+function varargout = subsFileExt_(vcFile, varargin)
+% Substitute the extension part of the file
+% [out1, out2, ..] = subsFileExt_(filename, ext1, ext2, ...)
+
+[vcDir_, vcFile_, ~] = fileparts(vcFile);
+if isempty(vcDir_), vcDir_ = '.'; end
+for i=1:numel(varargin)
+    vcExt_ = varargin{i};    
+    varargout{i} = [vcDir_, filesep(), vcFile_, vcExt_];
+end
+
+
+%--------------------------------------------------------------------------
+function flag = ask_user_(vcMsg, fYes)
+if nargin<2, fYes = 1; end
+if fYes
+    vcAns = questdlg(vcMsg, '', 'Yes', 'No', 'Yes');
+else
+    vcAns = questdlg(vcMsg, '', 'Yes', 'No', 'Yes');
+end
+flag = strcmp(vcAns, 'Yes');
+
+
+%--------------------------------------------------------------------------
+function S = try_load_(vcFile)
+S = [];
+if isempty(vcFile), return; end
+try
+    S = load(vcFile);
+    fprintf('%s loaded\n', vcFile);
+catch
+    errordlg(sprintf('%s load error', vcFile)); 
+end
+
+
+% --- Executes on button press in btnUpdate.
+function btnUpdate_Callback(hObject, eventdata, handles)
+% hObject    handle to btnUpdate (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+git_pull_();
+
+
+%--------------------------------------------------------------------------
+% 9/26/17 JJJ: Created and tested
+function git_pull_(vcVersion)
+% https://github.com/drbenvincent/github-sync-matlab
+% startDir = cd();
+if nargin<1, vcVersion = ''; end
+
+repoURL = 'https://github.com/jamesjun/vistrack';
+% repoName = 'JRCLUST';
+try
+    if isempty(vcVersion)
+        code = system('git pull');
+    else
+        code = system(sprintf('git reset --hard "%s"', vcVersion));
+    end
+catch
+	code = -1;
+end
+if code ~= 0
+    fprintf(2, 'Not a git repository. Please run the following command to clone from GitHub.\n');    
+    fprintf(2, '\tRun system(''git clone %s.git''\n', repoURL);
+    fprintf(2, '\tor install git from https://git-scm.com/downloads\n');  
+else
+    edit('change_log.txt');
+end
+
+
+%--------------------------------------------------------------------------
+% 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
+function [vcVer, vcDate] = version_()
+if nargin<1, vcFile_prm = ''; end
+vcVer = 'v0.1.1';
+vcDate = '7/10/2018';
+if nargout==0
+    fprintf('%s (%s) installed\n', vcVer, vcDate);
+end
