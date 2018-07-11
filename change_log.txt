@@ -1,4 +1,9 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab, 2018/7/10
 
+[v0.1.2]
+vistrack.m script added
+Enabled save button when loading the tracking result
+
 [v0.1.1]
+Initial commit

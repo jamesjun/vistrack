@@ -62,6 +62,10 @@ set(handles.editSettings, 'String', csSettings);
 [vcVer, vcVer_date] = version_();
 set(handles.textVer, 'String', sprintf('%s (%s) James Jun', vcVer, vcVer_date));
 
+if ~exist('.git', 'dir') ~= 7
+    set(handles.btnUpdate, 'Enable', 'off');
+end
+    
 % Update handles structure
 guidata(hObject, handles);
 
@@ -130,7 +134,7 @@ if exist_file_(vcFile_out)
             set(handles.btnBackground, 'Enable', 'off');
             set(handles.btnTrack, 'Enable', 'off');
             set(handles.btnPreview, 'Enable', 'off');
-            set(handles.btnSave, 'Enable', 'off');
+            set(handles.btnSave, 'Enable', 'on');
             set(handles.panelPlot, 'Visible', 'on');  
             return;
         catch
@@ -408,6 +412,7 @@ if ~exist('TLIM0', 'var')
         return;
     end
 end
+%     vistrack('checkLedPos', handles.vidobj, handles.xyLED);
 
 try 
     if ~exist('FLIM0', 'var')
@@ -420,35 +425,12 @@ try
     SYNC_SKIP0 = (diff(FLIM0)/FPS0 - diff(TLIM0))/SYNC_PERIOD;
     fprintf('TLIM: [%f, %f], SYNC_SKIP: %f\n', TLIM0(1), TLIM0(2), SYNC_SKIP0);
     SYNC_SKIP = round(SYNC_SKIP0);
-%     if SYNC_SKIP0 > .5 %trim video
-%         if SYNC_FIRST
-%             FLIM0(1) = FLIM0(1) + SYNC_SKIP*FPS0*SYNC_PERIOD;
-%             FLIM0(2) = round(FLIM0(1) + diff(TLIM0)*FPS0);
-%         else
-%             FLIM0(2) = FLIM0(2) - SYNC_SKIP*FPS0*SYNC_PERIOD;
-%             FLIM0(1) = round(FLIM0(2) - diff(TLIM0)*FPS0);
-%         end
-%         FLIM0(1) = detectBlink(handles, FLIM0(1));
-%         FLIM0(2) = detectBlink(handles, FLIM0(2));
-%         FPS = diff(FLIM0) / diff(TLIM0);
-%         disp('Excess video trimmed');
-%     elseif SYNC_SKIP0 < -.5 %camera recorded longer than ADC, trim ADC
-        if SYNC_FIRST
-            TLIM0(2) = TLIM0(2) + SYNC_SKIP*SYNC_PERIOD;
-%             TLIM0(1) = TLIM0(1) + SYNC_SKIP*SYNC_PERIOD;
-%             TLIM0(2) = TLIM0(1) + diff(FLIM0)/FPS0;
-%             [~, imin] = min(abs(chTCAM - TLIM0(2)));
-%             TLIM0(2) = chTCAM(imin);
-        else
-            TLIM0(1) = TLIM0(1) - SYNC_SKIP*SYNC_PERIOD;
-%             TLIM0(2) = TLIM0(2) - SYNC_SKIP*SYNC_PERIOD;
-%             TLIM0(1) = TLIM0(2) - diff(FLIM0)/FPS0;
-%             [~, imin] = min(abs(chTCAM - TLIM0(1)));
-%             TLIM0(1) = chTCAM(imin);
-        end
-        FPS = diff(FLIM0) / diff(TLIM0);
-%         disp('Excess ADC trimmed');
-%     end
+    if SYNC_FIRST
+        TLIM0(2) = TLIM0(2) + SYNC_SKIP*SYNC_PERIOD;
+    else
+        TLIM0(1) = TLIM0(1) - SYNC_SKIP*SYNC_PERIOD;
+    end
+    FPS = diff(FLIM0) / diff(TLIM0);
     fCheckSync = 0;
     
     %check if correct
@@ -1252,42 +1234,17 @@ function btnUpdate_Callback(hObject, eventdata, handles)
 % hObject    handle to btnUpdate (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-git_pull_();
-
-
-%--------------------------------------------------------------------------
-% 9/26/17 JJJ: Created and tested
-function git_pull_(vcVersion)
-% https://github.com/drbenvincent/github-sync-matlab
-% startDir = cd();
-if nargin<1, vcVersion = ''; end
-
-repoURL = 'https://github.com/jamesjun/vistrack';
-% repoName = 'JRCLUST';
-try
-    if isempty(vcVersion)
-        code = system('git pull');
-    else
-        code = system(sprintf('git reset --hard "%s"', vcVersion));
-    end
-catch
-	code = -1;
-end
-if code ~= 0
-    fprintf(2, 'Not a git repository. Please run the following command to clone from GitHub.\n');    
-    fprintf(2, '\tRun system(''git clone %s.git''\n', repoURL);
-    fprintf(2, '\tor install git from https://git-scm.com/downloads\n');  
-else
-    edit('change_log.txt');
-end
+vistrack('update');
+msgbox('Update successful, please restart');
 
 
 %--------------------------------------------------------------------------
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.1.1';
-vcDate = '7/10/2018';
+% vcVer = 'v0.1.2';
+% vcDate = '7/11/2018';
+[vcVer, vcDate] = vistrack('version');
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
 end

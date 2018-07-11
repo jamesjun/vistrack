@@ -1,5 +1,7 @@
-function iFrame = detectBlink(handles, mode)
+function iFrame = detectBlink(handles, mode, fAsk)
 % Returns the absolute frame
+if nargin<3, fAsk = 1; end
+
 mode = lower(mode);
 vidobj = handles.vidobj;
 switch mode
@@ -66,13 +68,15 @@ else
     fAskUser = 1;
 end
 
-if fAskUser    
+if fAskUser && fAsk   
     implay(trImg);
     vcMsg = sprintf('Find the %s brightest blink, and close the movie', mode);
     uiwait(msgbox({vcMsg, handles.vidFname}));
     ans = inputdlg('Frame Number', 'First frame',1,{num2str(iFrame)});
     iFrame = str2num(ans{1});
     fprintf('Frame %d selected.\n', iFrame);
+else
+    iFrame = []; return
 end
 
 iFrame = iFrame + FLIM1(1) - 1;
