@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 10-Jul-2018 21:12:28
+% Last Modified by GUIDE v2.5 11-Jul-2018 17:32:10
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -115,7 +115,7 @@ function btnLoadVideo_Callback(hObject, eventdata, handles)
 %           out: {vidfile, vidobj}
 
 vidFname = get(handles.edit1, 'String');
-if exist(vidFname, 'file') ~= 2
+if ~exist_file_(vidFname)
     [FileName,PathName,FilterIndex] = uigetfile('*.wmv;*.avi;*.mpg;*.mp4', ...
             'Select video file', vidFname);
     if ~FilterIndex, return; end
@@ -162,17 +162,22 @@ try
 %     [PathName, fname, ~] = fileparts(vidFname);
     
     % set timestamps if exists
-    vcFile_Rs = strrep(vidFname, '.wmv', '_Rs.mat');
+    vcFile_Rs = subsFileExt_(vidFname, '_Rs.mat');
     if ~exist_file_(vcFile_Rs), vcFile_Rs = ''; end
     handles.ADCfile = vcFile_Rs;
     set(handles.editADCfile, 'String', vcFile_Rs);
     handles.ADC = try_load_(handles.ADCfile);
 
-    vcFile_Ts = strrep(vidFname, '.wmv', '_Ts.mat');    
+    vcFile_Ts = subsFileExt_(vidFname, '_Ts.mat');
     if ~exist_file_(vcFile_Ts), vcFile_Ts = ''; end
     handles.ADCfileTs = vcFile_Ts;
     set(handles.editADCfileTs, 'String', vcFile_Ts);   
     handles.ADCTS = try_load_(handles.ADCfileTs);
+    
+    if isempty(handles.ADC) || isempty(handles.ADCTS)
+        set(handles.btnBackground, 'Enable', 'on');
+        set(handles.btnSync, 'Enable', 'off');
+    end
     
     guidata(hObject, handles);
     msgbox([msgstr ' file(s) loaded']);  
@@ -219,103 +224,118 @@ function btnBackground_Callback(hObject, eventdata, handles)
 
 LOADSETTINGS;
 
-% Get time range from spike2
-if ~exist('TLIM', 'var')
-    try
-        ADCTC = load(get(handles.editADCfileTs, 'String'));
-        prefix = getSpike2Prefix(ADCTC);
-        chTEXT = getfield(ADCTC, sprintf('%s_Ch%d', prefix, ADC_CH_TEXT));
-        [EODR, TEOD, chName] = getSpike2Chan(handles.ADC, ADC_CH_EODR);
-        AMPL = getSpike2Chan(handles.ADC, ADC_CH_AMPL);
-        hfig = figure; AX = [];
-        subplot 212; plot(TEOD, AMPL); AX(2) = gca; grid on;
-        subplot 211; plot(TEOD, EODR); AX(1) = gca; grid on;        
-        linkaxes(AX, 'x');
-        hold on;                
-        xlabel('Time (s)'); ylabel('EOD Rate (Hz)'); axis tight;                
-        title({'Set time range and double-click', ...
-               'r: GATE OPEN, m: ENTERED ARENA; g: GATE CLOSE', ...
-               'c: FOUND FOOD; b: LIGHT BLINK; k: Default'}); 
-        set(hfig, 'Name', handles.vidFname, 'OuterPosition', get(0, 'ScreenSize'));
-        drawnow;
-        TLIM = [nan, nan];
-        for i=1:numel(chTEXT.times)            
-            if ~isempty(strfind(chTEXT.text(i,:), 'GATE_OPEN'));                
-                color = '-r';
-            elseif ~isempty(strfind(chTEXT.text(i,:), 'ENTERED_ARENA'));
-                color = '-m';                
-            elseif ~isempty(strfind(chTEXT.text(i,:), 'GATE_CLOSE'));
-                color = '-g';
-            elseif ~isempty(strfind(chTEXT.text(i,:), 'FOUND_FOOD'));
-                color = '-c';            
-            elseif ~isempty(strfind(chTEXT.text(i,:), 'LIGHT_BLINK'));
-                color = '-b';
-            else
-                color = '-k';
-            end
-            plot(chTEXT.times(i)*[1 1], get(gca, 'YLim'), color);
-        end        
-        gcax = get(gca, 'XLim'); 
-        gcay = get(gca, 'YLim');
-        h = imrect(gca, [gcax(1) gcay(1) diff(gcax) diff(gcay)]);
-        hpos = wait(h);
-        TLIM(1) = hpos(1);
-        TLIM(2) = sum(hpos([1 3]));
-        
-        fprintf('TLIM: ');
-        disp(TLIM(:)');
-        try close(hfig), catch, end;
-    catch
-        errordlg('Specify TLIM = [First, Last]; in the Settings');
-        disp(lasterr);
-        handles.ADC
-        return;
-    end
-end
-
-% Set time range to track
-FLIM1 = round(interp1(handles.TLIM0, handles.FLIM0, TLIM, 'linear', 'extrap'));
-FLIM1(1) = max(FLIM1(1), 1);
-FLIMa = lim_bound(FLIM1(1) + [-149,150], 1, FLIM1(2));
-FLIMb = lim_bound(FLIM1(2) + [-149,150], 1, handles.FLIM0(2));
-
-% Refine the first and last frames to track
+% Get time range from spike2  
+vcFile_adc_ts = get(handles.editADCfileTs, 'String');
+fSkipAdc = ~exist_file_(vcFile_adc_ts);
+% if fSkipAdc
 try
-    % first frame to track
-    h=msgbox('Loading... (this will close automatically)');
-    trImg = read(handles.vidobj, FLIMa);
-%     trImg = trImg(:,:,1,:);
-    try close(h); catch, end;    
-    implay(trImg);       
-    uiwait(msgbox('Find the first frame to track and background, and close the movie'));
-    answer = inputdlg({'First frame', 'Background frame'}, 'Get frames', 1, ...
-        {'1', sprintf('%d', diff(FLIMa)+1)});
-    firstFrame = str2num(answer{1});
-    img1 = trImg(:, :, :, firstFrame);
-    FLIM(1) = firstFrame + FLIMa(1) - 1;    
-    bgFrame = str2num(answer{2});
-    img00 = trImg(:, :, :, bgFrame);    
-    
-    % last frame to track
-    h=msgbox('Loading... (this will close automatically)');
-    trImg = read(handles.vidobj, FLIMb);
-%     trImg = trImg(:,:,1,:);
-    try close(h); catch, end;    
-    implay(trImg);
-    uiwait(msgbox('Find the last frame to track, and close the movie'));
-    ans = inputdlg('Frame Number', 'Last frame', 1, {sprintf('%d', diff(FLIMb)+1)});
-    FLIM(2) = str2num(ans{1}) + FLIMb(1) - 1;
-
-    % camera time unit
-    TC = interp1(handles.FLIM0, handles.TLIM0, FLIM(1):FLIM(2), 'linear');
-
-    % Create background
+    [FLIM, TC, img1, img00] = mov_flim_(handles.vidobj);
     [img00, MASK, xy_init, vec0, xy0] = makeBackground(img1, img00);
-
+    try
+        TC = interp1(handles.FLIM0, handles.TLIM0, FLIM(1):FLIM(2), 'linear');
+    catch
+        ;
+    end
 catch
-    disp(lasterr);
     return;
 end
+% elseif ~exist('TLIM', 'var')
+%     try
+%         ADCTC = load(vcFile_adc_ts);
+%         prefix = getSpike2Prefix(ADCTC);
+%         chTEXT = getfield(ADCTC, sprintf('%s_Ch%d', prefix, ADC_CH_TEXT));
+%         [EODR, TEOD, chName] = getSpike2Chan(handles.ADC, ADC_CH_EODR);
+%         AMPL = getSpike2Chan(handles.ADC, ADC_CH_AMPL);
+%         hfig = figure; AX = [];
+%         subplot 212; plot(TEOD, AMPL); AX(2) = gca; grid on;
+%         subplot 211; plot(TEOD, EODR); AX(1) = gca; grid on;        
+%         linkaxes(AX, 'x');
+%         hold on;                
+%         xlabel('Time (s)'); ylabel('EOD Rate (Hz)'); axis tight;                
+%         title({'Set time range and double-click', ...
+%                'r: GATE OPEN, m: ENTERED ARENA; g: GATE CLOSE', ...
+%                'c: FOUND FOOD; b: LIGHT BLINK; k: Default'}); 
+%         set(hfig, 'Name', handles.vidFname, 'OuterPosition', get(0, 'ScreenSize'));
+%         drawnow;
+%         TLIM = [nan, nan];
+%         for i=1:numel(chTEXT.times)            
+%             if ~isempty(strfind(chTEXT.text(i,:), 'GATE_OPEN'));                
+%                 color = '-r';
+%             elseif ~isempty(strfind(chTEXT.text(i,:), 'ENTERED_ARENA'));
+%                 color = '-m';                
+%             elseif ~isempty(strfind(chTEXT.text(i,:), 'GATE_CLOSE'));
+%                 color = '-g';
+%             elseif ~isempty(strfind(chTEXT.text(i,:), 'FOUND_FOOD'));
+%                 color = '-c';            
+%             elseif ~isempty(strfind(chTEXT.text(i,:), 'LIGHT_BLINK'));
+%                 color = '-b';
+%             else
+%                 color = '-k';
+%             end
+%             plot(chTEXT.times(i)*[1 1], get(gca, 'YLim'), color);
+%         end        
+%         gcax = get(gca, 'XLim'); 
+%         gcay = get(gca, 'YLim');
+%         h = imrect(gca, [gcax(1) gcay(1) diff(gcax) diff(gcay)]);
+%         hpos = wait(h);
+%         TLIM(1) = hpos(1);
+%         TLIM(2) = sum(hpos([1 3]));
+%         
+%         fprintf('TLIM: ');
+%         disp(TLIM(:)');
+%         try close(hfig), catch, end;
+%     catch
+%         errordlg('Specify TLIM = [First, Last]; in the Settings');
+%         disp(lasterr);
+%         handles.ADC
+%         return;
+%     end
+% end
+% 
+% % Set time range to track
+% if ~fSkipAdc
+%     FLIM1 = round(interp1(handles.TLIM0, handles.FLIM0, TLIM, 'linear', 'extrap'));
+%     FLIM1(1) = max(FLIM1(1), 1);
+%     FLIMa = lim_bound(FLIM1(1) + [-149,150], 1, FLIM1(2));
+%     FLIMb = lim_bound(FLIM1(2) + [-149,150], 1, handles.FLIM0(2));
+% 
+%     % Refine the first and last frames to track
+%     try
+%         % first frame to track
+%         h=msgbox('Loading... (this will close automatically)');
+%         trImg = read(handles.vidobj, FLIMa);
+%     %     trImg = trImg(:,:,1,:);
+%         try close(h); catch, end;    
+%         implay(trImg);       
+%         uiwait(msgbox('Find the first frame to track and background, and close the movie'));
+%         answer = inputdlg({'First frame', 'Background frame'}, 'Get frames', 1, ...
+%             {'1', sprintf('%d', diff(FLIMa)+1)});
+%         firstFrame = str2num(answer{1});
+%         img1 = trImg(:, :, :, firstFrame);
+%         FLIM(1) = firstFrame + FLIMa(1) - 1;    
+%         bgFrame = str2num(answer{2});
+%         img00 = trImg(:, :, :, bgFrame);    
+% 
+%         % last frame to track
+%         h=msgbox('Loading... (this will close automatically)');
+%         trImg = read(handles.vidobj, FLIMb);
+%     %     trImg = trImg(:,:,1,:);
+%         try close(h); catch, end;    
+%         implay(trImg);
+%         uiwait(msgbox('Find the last frame to track, and close the movie'));
+%         ans = inputdlg('Frame Number', 'Last frame', 1, {sprintf('%d', diff(FLIMb)+1)});
+%         FLIM(2) = str2num(ans{1}) + FLIMb(1) - 1;
+% 
+%         % camera time unit
+%         TC = interp1(handles.FLIM0, handles.TLIM0, FLIM(1):FLIM(2), 'linear');
+% 
+%         % Create background
+%         [img00, MASK, xy_init, vec0, xy0] = makeBackground(img1, img00);
+%     catch
+%         disp(lasterr);
+%         return;
+%     end    
+% end
 
 % Create a background 
 % ans = inputdlg({'Second image frame #'}, 'Background', 1, {sprintf('%0.0f', FLIM(2))});
@@ -417,8 +437,8 @@ end
 try 
     if ~exist('FLIM0', 'var')
         FLIM0 = [];
-        FLIM0(1) = detectBlink(handles, 'first');
-        FLIM0(2) = detectBlink(handles, 'last');
+        [FLIM0(1), handles.xyLed] = detectBlink(handles, 'first');
+        FLIM0(2) = detectBlink(handles, 'last'); 
     end
     if ~exist('SYNC_FIRST', 'var'), SYNC_FIRST = 0; end
     FPS = diff(FLIM0) / diff(TLIM0);
@@ -1012,7 +1032,7 @@ function btnLoadPrev_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 resultFile = get(handles.editResultFile, 'String');
-if exist(resultFile, 'file') ~= 2
+if ~exist_file_(resultFile)
     [FileName,PathName,FilterIndex] = uigetfile('*_Track.mat','Select *_Track.mat file', resultFile);
     if ~FilterIndex, return; end
     resultFile = fullfile(PathName, FileName);
@@ -1034,17 +1054,21 @@ try
         'ADC', 'ADCTS', ...
         'MOV', 'XC_off', 'YC_off', 'vidFname', 'ESAC'};
     for i=1:numel(csFields)
-        eval(sprintf('handles.%s = S.%s;', csFields{i}, csFields{i}));
+        try
+            eval(sprintf('handles.%s = S.%s;', csFields{i}, csFields{i}));
+        catch
+            ;
+        end
     end        
 
     set(handles.edit1, 'String', handles.vidFname);
     set(handles.editADCfile, 'String', [handles.vidFname(1:end-4), '_Rs.mat']);
     set(handles.editADCfileTs, 'String', [handles.vidFname(1:end-4), '_Ts.mat']);
 
-    set(handles.btnSync, 'Enable', 'on');
-    set(handles.btnBackground, 'Enable', 'on');
-    set(handles.btnTrack, 'Enable', 'on');
-    set(handles.btnPreview, 'Enable', 'on');
+    set(handles.btnSync, 'Enable', 'off');
+    set(handles.btnBackground, 'Enable', 'off');
+    set(handles.btnTrack, 'Enable', 'off');
+    set(handles.btnPreview, 'Enable', 'off');
     set(handles.btnSave, 'Enable', 'on');
     set(handles.panelPlot, 'Visible', 'on'); 
 
@@ -1066,16 +1090,22 @@ function btnSave_Callback(hObject, eventdata, handles)
 handles.ESAC = calcESAC(handles);
 
 %save file
-h = msgbox('Saving... (this will close automatically)');       
+h = msgbox('Saving... (this will close automatically)');    
+S_save = copyStruct_(handles, {'TLIM0', 'FLIM0', 'FPS', ...
+    'MASK' ,'xy_init' ,'vec0' ,'xy0' ,'TC' ,'TLIM' ,'FLIM' ,'img1' ,'img00', ...
+    'SE' ,'thresh' ,'AreaTarget' ,'WINPOS' ,'img0', ...
+    'XC' ,'YC' ,'AC' ,'xy_names' ,'ang_names' ,'csSettings', ...
+    'ADC', 'ADCTS', ...
+    'MOV', 'XC_off', 'YC_off', 'vidFname', 'ESAC'});
 try
     [pathstr, name, ext] = fileparts(handles.vidFname);
     outfname = fullfile(pathstr, [name, '_Track.mat']);
-    eval(sprintf('save(''%s'', ''-struct'', ''handles'');', outfname));
+    eval(sprintf('save(''%s'', ''-struct'', ''S_save'');', outfname));
 catch
     outfname = get(handles.editResultFile, 'String');
-    eval(sprintf('save(''%s'', ''-struct'', ''handles'');', outfname));
+    eval(sprintf('save(''%s'', ''-struct'', ''S_save'');', outfname));
 end
-try close(h); catch, end;
+close_(h);
 set(handles.editResultFile, 'String', outfname);
 msgbox_(sprintf('Output saved to %s', outfname));
 
@@ -1247,4 +1277,173 @@ if nargin<1, vcFile_prm = ''; end
 [vcVer, vcDate] = vistrack('version');
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
+end
+
+
+% --- Executes on button press in btnLoadTrialSet.
+function btnLoadTrialSet_Callback(hObject, eventdata, handles)
+% hObject    handle to btnLoadTrialSet (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in btnLearningCurve.
+function btnLearningCurve_Callback(hObject, eventdata, handles)
+% hObject    handle to btnLearningCurve (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton58.
+function pushbutton58_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton58 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton59.
+function pushbutton59_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton59 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton60.
+function pushbutton60_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton60 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton61.
+function pushbutton61_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton61 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton62.
+function pushbutton62_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton62 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton63.
+function pushbutton63_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton63 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton64.
+function pushbutton64_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton64 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton65.
+function pushbutton65_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton65 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton66.
+function pushbutton66_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton66 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton67.
+function pushbutton67_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton67 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton68.
+function pushbutton68_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton68 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton69.
+function pushbutton69_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton69 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton70.
+function pushbutton70_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton70 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+function [FLIM, TC, img1, img00] = mov_flim_(vidobj, nFrames_skip)
+if nargin<2, nFrames_skip = []; end % skip every 10 frames
+if isempty(nFrames_skip), nFrames_skip = 60; end
+warning off;
+nFrames = vidobj.NumberOfFrames;
+TC = linspace(0, vidobj.Duration, nFrames);
+viF = 1:nFrames_skip:nFrames;
+tmr = read_(vidobj, viF);    
+
+% rough scan
+implay(tmr);
+uiwait(msgbox('Find the first and last frame to track, and close the movie'));
+csAns = inputdlg({'First frame', 'Last frame'}, 'Get frames', 1, ...
+    {'1', sprintf('%d', numel(viF))});
+frame_first = viF(str2num(csAns{1}));
+frame_last = viF(str2num(csAns{2}));
+
+% Find first frame to track
+viF_first = min(max(frame_first + (-150:149),1),nFrames);
+tmr = read_(vidobj, viF_first);
+implay(tmr);
+uiwait(msgbox('Find the first frame to track and background, and close the movie'));
+csAns = inputdlg({'First frame', 'Background frame'}, 'Get frames', 1, ...
+    {'1', num2str(numel(viF_first))});
+img1 = tmr(:,:,str2num(csAns{1}));
+img00 = tmr(:,:,str2num(csAns{2}));
+frame_first = viF_first(str2num(csAns{1}));
+
+% Find last frame to track
+viF_last = min(max(frame_last + (-150:149),1),nFrames);
+tmr = read_(vidobj, viF_last);
+implay(tmr);
+uiwait(msgbox('Find the last frame to track, and close the movie'));
+csAns = inputdlg({'Last frame'}, 'Get frames', 1, ...
+    {'1'});
+frame_last = viF_last(str2num(csAns{1}));
+
+FLIM = [frame_first, frame_last];
+
+
+function close_(h)
+try close(h); catch; end
+
+
+function tmr = read_(vidobj, viF)
+h=msgbox('Loading video...');
+tmr = zeros(vidobj.Height, vidobj.Width, numel(viF), 'uint8');
+for iF1=1:numel(viF)
+    img = read(vidobj, viF(iF1));
+    tmr(:,:,iF1) = img(:,:,1);
+end
+close_(h);
+
+
+function S_save = copyStruct_(handles, csField)
+for i=1:numel(csField)
+    try
+        S_save.(csField{i}) = handles.(csField{i});
+    catch
+        S_save.(csField{i}) = []; % not copied
+    end
 end

@@ -71,36 +71,19 @@ if S.fShow
 end
 
 % Process each frame
+[hAx, hImg, hPlot1, hPlot2] = deal([]);
 BWprev=[]; BWprev1=[];
 for iF=1:nframes
     [img, dimg, dimg1] = getFrame_(IMG, iF, WINPOS, S.img0);
-    BW0 = (dimg > thresh);
+    BW0 = (dimg(:,:,1) > thresh);
     BW = imdilate(bwmorph(BW0, 'clean', inf), S.SE);
-%     BW = imclearborder(BW,4); %remove boundary touching    
     BW1 = BW;
     iF1 = FLIM(1) + iF - S.FLIM(1);
-%     if iF1 == 3601
-%         disp('hold');
-%     end
     regions = regionprops(BW, {'Area', 'Centroid', 'Orientation', 'FilledImage', 'BoundingBox'});
     
     %remove blobs not touching the fish's blob from the prev. frame
     if numel(regions) > 1
         L = bwlabel(BW, 8);
-%         if iF > 10 && S.fBWprev 
-%             IKILL = [];            
-%             for iR = 1:numel(regions)
-%                 BWL = (L == iR);
-%                 if ~any(any(BWL & BWprev)) && ~any(any(BWL & BWprev1))
-%                     BW(BWL) = 0; %erase region
-%                     IKILL(end+1) = iR;
-%                 end
-%             end
-%             regions(IKILL) = [];
-%             if isempty(regions)
-%                 disperr();
-%             end
-%         end
         if iF1<=10 % first frame, pick closest to the center
             [iRegion] = region_nearest(regions, S.xy0 - WINPOS([1,3]));
             regions = regions(iRegion);
@@ -147,20 +130,29 @@ for iF=1:nframes
     if S.fShow
         img1 = img; 
         img1(bwperim(BW)) = 255;
-                
-        clf(hfig);
-        figure(hfig);
-        
-        imshow(img1); hold on;
-        plot(XY(2, 1), XY(2, 2), 'go', ...
+          
+        try
+            delete(hPlot1);
+            delete(hPlot2);
+        catch
+        end
+        if isempty(hImg)
+            figure(hfig);
+            hImg = imshow(img1);
+            hAx = gca;
+        else
+            set(hImg,'CData', img1);
+        end
+        hold on;
+        hPlot1 = plot(hAx, XY(2, 1), XY(2, 2), 'go', ...
             XY(3:end, 1), XY(3:end, 2), 'mo', 'LineWidth', 2);
         
         % interpolated curve
         nxy = size(XY,1);
         X1 = interp1(2:nxy, XY(2:end, 1), 2:.1:nxy, 'spline');
         Y1 = interp1(2:nxy, XY(2:end, 2), 2:.1:nxy, 'spline');
-        plot(X1, Y1, 'm-', XY(1,1), XY(1,2), 'g+', 'LineWidth', 2); %Mark the centroid
-        title(sprintf('Frame = %d', iF + FLIM(1) - 1));
+        hPlot2 = plot(hAx, X1, Y1, 'm-', XY(1,1), XY(1,2), 'g+', 'LineWidth', 2); %Mark the centroid
+        title(hAx, sprintf('Frame = %d', iF + FLIM(1) - 1));
         drawnow;
     end
         

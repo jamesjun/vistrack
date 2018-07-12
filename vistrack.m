@@ -25,6 +25,8 @@ switch lower(vcCmd)
     case 'edit', edit_(vcArg1); 
     case 'unit-test', unit_test_(vcArg1);    
     case 'update', update_(vcArg1);
+%     case 'fixledpos', varargout{1} = fixLedPos_(vcArg1);
+        
     otherwise, help_(); return;
 end %switch
 if fReturn, return; end
@@ -89,7 +91,7 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.1.2';
+vcVer = 'v0.1.3';
 vcDate = '7/11/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
@@ -130,9 +132,11 @@ csHelp = {...
     '  vistrack dir myparam.prm'; 
     '    List all recording files to be clustered together (csFile_merge)';
     '';
-    '[Deployment]';
+    '# Deployment';
     '  vistrack update';
     '    Update from Github'; 
+    '  vistrack update version';
+    '    Download specific version from Github'; 
     '  vistrack commit';
     '    Commit vistrack code to Github';
     '  vistrack unit-test';
@@ -441,3 +445,168 @@ end
 end %func
 
 
+%--------------------------------------------------------------------------
+% function xyLED = fixLedPos_(vidobj, FLIM1)
+% if nargin<2, FLIM1 = []; end
+% square_len = 50;
+% 
+% if isempty(FLIM1), FLIM1 = [1, 300]; end % show first 300 frames
+% FLIM1(2) = min(vidobj.NumberOfFrames, FLIM1(2));
+% try
+%     hMsg = msgbox('Loading video...');
+%     trImg = read(vidobj, FLIM1);
+%     close_(hMsg);
+% catch
+%     disperr_();
+%     xyLed = [];
+%     return;
+% end
+% trImg = squeeze(trImg(:,:,1,:));   % extract red color
+% % img_mean = uint8(mean(single(trImg),3));
+% % img_sd = (std(single(trImg),1,3));
+% img_pp = (max(trImg,[],3) - min(trImg,[],3));
+% [~,imax_pp] = max(img_pp(:));
+% [yLed, xLed] = ind2sub(size(img_pp), imax_pp);
+% 
+% hFig = create_figure_('fig_led', [0 0 1 1]); hold on;
+% % subplot 121; imshow(img_mean); axis equal;
+% imagesc(img_pp); axis tight; axis equal; colormap gray;
+% hold on; plot(xLed, yLed, 'ro');
+% % h_point = imrect(gca, [xLed, yLed, 0, 0] + square_len*[-.5,-.5,1,1])
+% % h_point.setColor('r');
+% 
+% % xyLED = ginput(1);
+% end %func
+
+
+%--------------------------------------------------------------------------
+% 17/12/5 JJJ: Error info is saved
+% Display error message and the error stack
+function disperr_(vcMsg, hErr)
+% disperr_(vcMsg): error message for user
+% disperr_(vcMsg, hErr): hErr: MException class
+% disperr_(vcMsg, vcErr): vcErr: error string
+try
+    dbstack('-completenames'); % display an error stack
+    if nargin<1, vcMsg = ''; end
+    if nargin<2, hErr = lasterror('reset');  end
+    if ischar(hErr) % properly formatted error
+        vcErr = hErr;
+    else
+%         save_err_(hErr, vcMsg); % save hErr object?   
+        vcErr = hErr.message;        
+    end
+catch
+    vcErr = '';
+end
+if nargin==0
+    fprintf(2, '%s\n', vcErr);
+elseif ~isempty(vcErr)
+    fprintf(2, '%s:\n\t%s\n', vcMsg, vcErr);
+else
+    fprintf(2, '%s:\n', vcMsg);
+end
+% try gpuDevice(1); disp('GPU device reset'); catch, end
+end %func
+
+
+%--------------------------------------------------------------------------
+function hFig = create_figure_(vcTag, vrPos, vcName, fToolbar, fMenubar)
+if nargin<2, vrPos = []; end
+if nargin<3, vcName = ''; end
+if nargin<4, fToolbar = 0; end
+if nargin<5, fMenubar = 0; end
+if isempty(vcTag)
+    hFig = figure();
+elseif ischar(vcTag)
+    hFig = figure_new_(vcTag); 
+else
+    hFig = vcTag;
+end
+set(hFig, 'Name', vcName, 'NumberTitle', 'off', 'Color', 'w');
+clf(hFig);
+set(hFig, 'UserData', []); %empty out the user data
+if ~fToolbar
+    set(hFig, 'ToolBar', 'none'); 
+else
+    set(hFig, 'ToolBar', 'figure'); 
+end
+if ~fMenubar
+    set(hFig, 'MenuBar', 'none'); 
+else
+    set(hFig, 'MenuBar', 'figure'); 
+end
+
+if ~isempty(vrPos), resize_figure_(hFig, vrPos); end
+end %func
+
+
+%--------------------------------------------------------------------------
+function close_(hMsg)
+try close(hMsg); catch; end
+end %func
+
+
+%--------------------------------------------------------------------------
+function hFig = figure_new_(vcTag)
+%remove prev tag duplication
+delete_multi_(findobj('Tag', vcTag, 'Type', 'Figure')); 
+
+hFig = figure('Tag', vcTag);
+end %func
+
+
+%--------------------------------------------------------------------------
+function hFig = resize_figure_(hFig, posvec0, fRefocus)
+if nargin<3, fRefocus = 1; end
+height_taskbar = 40;
+
+pos0 = get(groot, 'ScreenSize'); 
+width = pos0(3); 
+height = pos0(4) - height_taskbar;
+% width = width;
+% height = height - 132; %width offset
+% width = width - 32;
+posvec = [0 0 0 0];
+posvec(1) = max(round(posvec0(1)*width),1);
+posvec(2) = max(round(posvec0(2)*height),1) + height_taskbar;
+posvec(3) = min(round(posvec0(3)*width), width);
+posvec(4) = min(round(posvec0(4)*height), height);
+% drawnow;
+if isempty(hFig)
+    hFig = figure; %create a figure
+else
+    hFig = figure(hFig);
+end
+drawnow;
+set(hFig, 'OuterPosition', posvec, 'Color', 'w', 'NumberTitle', 'off');
+end %func
+
+
+%--------------------------------------------------------------------------
+function delete_multi_(varargin)
+% provide cell or multiple arguments
+for i=1:nargin
+    try
+        vr1 = varargin{i};
+        if numel(vr1)==1
+            delete(varargin{i}); 
+        elseif iscell(vr1)
+            for i1=1:numel(vr1)
+                try
+                    delete(vr1{i1});
+                catch
+                end
+            end
+        else
+            for i1=1:numel(vr1)
+                try
+                    delete(vr1(i1));
+                catch
+                end
+            end
+        end
+    catch
+    end
+end
+end %func

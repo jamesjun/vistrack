@@ -1,4 +1,4 @@
-function iFrame = detectBlink(handles, mode, fAsk)
+function [iFrame, xyLED] = detectBlink(handles, mode, fAsk)
 % Returns the absolute frame
 if nargin<3, fAsk = 1; end
 
@@ -8,10 +8,12 @@ switch mode
     case 'first'
     FLIM1 = [1, 300];
     FLIM1(2) = min(FLIM1(2), vidobj.NumberOfFrames);
+    xyLED = []; % auto-detect
     
     case 'last'
     FLIM1 = [-300, -1] + vidobj.NumberOfFrames + 1;
     FLIM1(1) = max(FLIM1(1), 1); 
+    xyLED = handles.xyLed;
     
     otherwise
     if isnumeric(mode)
@@ -23,20 +25,19 @@ switch mode
     end
 end
 
-xyLED = handles.xyLED;
+h=msgbox('Loading... (this will close automatically)');       
+trImg = read(handles.vidobj, FLIM1);
+trImg = squeeze(trImg(:,:,1,:));
+try close(h); catch, end;
 
+if isempty(xyLED), xyLED = find_mov_max_(trImg); end
 yRange = xyLED(2)+(-5:5);
 xRange = xyLED(1)+(-5:5);
 yRange1 = xyLED(2)+(-15:15);
 xRange1 = xyLED(1)+(-15:15);
 
-h=msgbox('Loading... (this will close automatically)');       
-trImg = read(handles.vidobj, FLIM1);
-try close(h); catch, end;
 
-trImg = trImg(:,:,1,:);  
-
-trInt = trImg(yRange, xRange,1,:);
+trInt = trImg(yRange, xRange,:);
 trInt = mean(mean(trInt,1),2);
 vrInt = trInt(:);
 [vMax,iFrame] = max(vrInt);
@@ -44,13 +45,13 @@ vrInt = trInt(:);
 thresh = (vMax+vMin)/2; %vMax*.9 previously
 iFrame = find(diff(vrInt>thresh)>0, 1, mode)+1;
 
-if iFrame > 1 && iFrame < size(trImg,4)
+if iFrame > 1 && iFrame < size(trImg,3)
     hfig = figure;     
-    subplot 231; imshow(trImg(yRange1,xRange1,1,iFrame-1)); 
+    subplot 231; imshow(trImg(yRange1,xRange1,iFrame-1)); 
     title(num2str(iFrame-1));
-    subplot 232; imshow(trImg(yRange1,xRange1,1,iFrame)); 
+    subplot 232; imshow(trImg(yRange1,xRange1,iFrame)); 
     title(num2str(iFrame));    
-    subplot 233; imshow(trImg(yRange1,xRange1,1,iFrame+1)); 
+    subplot 233; imshow(trImg(yRange1,xRange1,iFrame+1)); 
     title(num2str(iFrame+1)); 
     subplot(2,3,4:6); bar(1:(diff(FLIM1)+1), vrInt); hold on;
     plot(iFrame*[1 1]+.5, get(gca, 'YLim'), 'r-');
@@ -62,6 +63,7 @@ if iFrame > 1 && iFrame < size(trImg,4)
         fAskUser = 0;
     else
         fAskUser = 1;
+        iFrame = nan;
     end
     try close(hfig), catch, end;
 else
@@ -75,8 +77,18 @@ if fAskUser && fAsk
     ans = inputdlg('Frame Number', 'First frame',1,{num2str(iFrame)});
     iFrame = str2num(ans{1});
     fprintf('Frame %d selected.\n', iFrame);
-else
-    iFrame = []; return
 end
 
-iFrame = iFrame + FLIM1(1) - 1;
+if ~isnan(iFrame)
+    iFrame = iFrame + FLIM1(1) - 1;
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function xyLed = find_mov_max_(trImg)
+img_pp = (max(trImg,[],3) - min(trImg,[],3));
+[~,imax_pp] = max(img_pp(:));
+[yLed, xLed] = ind2sub(size(img_pp), imax_pp);
+xyLed = [xLed, yLed];
+end %func
