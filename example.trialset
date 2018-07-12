@@ -1,0 +1,6 @@
+
+vcFile_track = 'D:\Aida\2014b_ShuffleCue\*_Track.mat';
+csAnimals = {'A','B','C','D'};
+fProbeTrial = 0;
+csDir_excl = {};
+csFile_excl = {};

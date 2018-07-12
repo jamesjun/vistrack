@@ -25,9 +25,10 @@ switch lower(vcCmd)
     case 'edit', edit_(vcArg1); 
     case 'unit-test', unit_test_(vcArg1);    
     case 'update', update_(vcArg1);
-%     case 'fixledpos', varargout{1} = fixLedPos_(vcArg1);
+    
+    case 'measure_trials', [varargout{1}, varargout{2}] = measure_trials_(vcArg1, vcArg2);
         
-    otherwise, help_(); return;
+    otherwise, help_();
 end %switch
 if fReturn, return; end
 
@@ -46,7 +47,7 @@ delete([vcDir_target, '*']);
 warning(S_warning);
 
 % Copy files
-csFiles_upload = {'*.m', 'GUI.fig', 'change_log.txt', 'readme.txt'};
+csFiles_upload = {'*.m', 'GUI.fig', 'change_log.txt', 'readme.txt', 'example.trialset'};
 copyfile_(csFiles_upload, vcDir_target, '.');
 
 edit_('change_log.txt');
@@ -91,7 +92,7 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.1.5';
+vcVer = 'v0.1.6';
 vcDate = '7/12/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
@@ -349,7 +350,8 @@ if ~exist_dir_('.git')
     return; 
 end
 if nargin<1, vcVersion = ''; end
-delete('settings_vistrack.m');
+delete_('settings_vistrack.m');
+delete_('example.trialset');
 repoURL = 'https://github.com/jamesjun/vistrack';
 try
     if isempty(vcVersion)
@@ -609,4 +611,83 @@ for i=1:nargin
     catch
     end
 end
+end %func
+
+
+%--------------------------------------------------------------------------
+function delete_(varargin)
+for i=1:narging
+    try
+        delete(varargin{i});
+    catch
+        ;
+    end
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function [cvrPathLen, cvrDuration] = measure_trials_(csFiles, csAnimals)
+
+% iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
+pixpercm = 7.238; % run S141106_LearningCurve_Control.m first cell
+angXaxis = -0.946;
+
+for iAnimal = 1:numel(csAnimals)
+    vcAnimal = csAnimals{iAnimal};
+    [~, csFiles_, ~] = cellfun(@(x)fileparts(x), csFiles, 'UniformOutput', 0);
+    vi_ = cellfun(@(x)x(4) == vcAnimal(1), csFiles_) & cellfun(@(x)lower(x(6)) ~= 'p', csFiles_);
+    csFiles_ = csFiles(vi_);
+    [vrPathLen_, vrDuration_] = deal(nan(size(csFiles_)));
+    fprintf('\nLoading animal %s\n\t', vcAnimal);
+    for iTrial = 1:numel(csFiles_)
+        try
+%             S_ = importTrial(csFiles_{iTrial}, angXaxis, pixpercm);
+            S_ = load(csFiles_{iTrial});
+            vrPathLen_(iTrial) = trial_pathlen_(S_, pixpercm, angXaxis);
+            vrDuration_(iTrial) = diff(S_.TC([1,end]));
+            fprintf('.');
+        catch
+            disp(lasterr());
+        end
+    end %for
+    [cvrPathLen{iTrial}, cvrDuration{iTrial}] = deal(vrPathLen_, vrDuration_);
+end %for
+end %func
+
+
+%--------------------------------------------------------------------------
+function [pathLen_cm, XH, YH, TC1] = trial_pathlen_(S_trial, pixpercm, angXaxis)
+[TC, XHc, YHc] = deal(S_trial.TC, S_trial.XC(:,2), S_trial.YC(:,2));
+TC1 = linspace(TC(1), TC(end), numel(TC)*10);
+XH = interp1(TC, XHc, TC1, 'spline');
+YH = interp1(TC, YHc, TC1, 'spline');
+pathLen = sum(sqrt(diff(XH).^2 + diff(YH).^2));
+
+xyStart = trial_xyStart_(S_trial, pixpercm, angXaxis);
+
+pathLen = pathLen + sqrt((XH(1) - xyStart(1)).^2 + (YH(1) - xyStart(2)).^2);
+pathLen_cm = pathLen / pixpercm;
+
+end %func
+
+
+%--------------------------------------------------------------------------
+function [xyStart, xyFood] = trial_xyStart_(S_trial, pixpercm, angXaxis)
+[~, dataID, ~] = fileparts(S_trial.vidFname);
+fishID = dataID(4);
+switch fishID
+    case 'A'
+        xyStart = [55, 50]; xyFood = [0 -10]; angRot = 0;
+    case 'B'
+        xyStart = [50, -55]; xyFood = [-10 0]; angRot = 90;
+    case 'C'
+        xyStart = [-55, -50]; xyFood = [0 10]; angRot = 180;
+    case 'D'
+        xyStart = [-50, 55]; xyFood = [10 0]; angRot = 270;
+end
+iAnimal = fishID - 'A' + 1;
+rotMat = rotz(angXaxis);    rotMat = rotMat(1:2, 1:2);
+xyStart = (xyStart * rotMat) .* [1, -1] * pixpercm + S_trial.xy0; %convert to pixel unit
+xyFood = (xyFood * rotMat) .* [1, -1] * pixpercm + S_trial.xy0; %convert to pixel unit
 end %func

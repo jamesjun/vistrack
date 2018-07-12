@@ -1,6 +1,10 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab, 2018/7/10
 
+[v0.1.6]
+Added .trialset file loading
+Added learing curve plot
+
 [v0.1.5]
 Timestamp error is fixed when no ADC file is present.
 Initialize button error is fixed when the very first or last frame of the movie is selected.

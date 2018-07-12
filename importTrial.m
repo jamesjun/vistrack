@@ -1,6 +1,8 @@
-function S = importTrial(handles)
-pixpercm = 1053.28/(sqrt(2)*100);
-angXaxis = -1.1590; %deg
+function S = importTrial(vcFile, pixpercm, angXaxis)
+if nargin<2, pixpercm = 1053.28/(sqrt(2)*100); end
+if nargin<3, angXaxis = -1.1590; end %degrees
+
+handles = load(vcFile);
 
 eval('settings');
 [EODR, TEOD, chName] = getSpike2Chan(handles.ADC, ADC_CH_EODR);

@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 11-Jul-2018 17:32:10
+% Last Modified by GUIDE v2.5 12-Jul-2018 17:40:09
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -1286,61 +1286,120 @@ function btnLoadTrialSet_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+vcFile_trialset = get(handles.editTrialSet, 'String');
+[FileName,PathName,FilterIndex] = uigetfile('*.trialset', ...
+        'Select trialset', vcFile_trialset);
+if ~FilterIndex, return; end
+vcFile_trialset = fullfile(PathName, FileName);
+set(handles.editTrialSet, 'String', vcFile_trialset);
+set(handles.panelTrialSet, 'Visible', 'on');
+edit(vcFile_trialset);
+
+
+% --- Executes on button press in btnEditTrialset.
+function btnEditTrialset_Callback(hObject, eventdata, handles)
+% hObject    handle to btnEditTrialset (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+edit(get(handles.editTrialSet, 'String'));
+
 
 % --- Executes on button press in btnLearningCurve.
 function btnLearningCurve_Callback(hObject, eventdata, handles)
 % hObject    handle to btnLearningCurve (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+S_trialset = file2struct(get_str_(handles.editTrialSet));
+[csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
+[cvrPathLen, cvrDuration] = vistrack('measure_trials', csFiles_Track, S_trialset.csAnimals);
 
 
-% --- Executes on button press in pushbutton58.
-function pushbutton58_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton58 (see GCBO)
+% --- Executes on button press in btnSamplingDensity.
+function btnSamplingDensity_Callback(hObject, eventdata, handles)
+% hObject    handle to btnSamplingDensity (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
 
-% --- Executes on button press in pushbutton59.
-function pushbutton59_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton59 (see GCBO)
+% --- Executes on button press in btnESCAN.
+function btnESCAN_Callback(hObject, eventdata, handles)
+% hObject    handle to btnESCAN (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
 
-% --- Executes on button press in pushbutton60.
-function pushbutton60_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton60 (see GCBO)
+% --- Executes on button press in btnBSCAN.
+function btnBSCAN_Callback(hObject, eventdata, handles)
+% hObject    handle to btnBSCAN (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
 
-% --- Executes on button press in pushbutton61.
-function pushbutton61_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton61 (see GCBO)
+% --- Executes on button press in btnVisitDensity.
+function btnVisitDensity_Callback(hObject, eventdata, handles)
+% hObject    handle to btnVisitDensity (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
 
-% --- Executes on button press in pushbutton62.
-function pushbutton62_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton62 (see GCBO)
+% --- Executes on button press in btnProbeTrials.
+function btnProbeTrials_Callback(hObject, eventdata, handles)
+% hObject    handle to btnProbeTrials (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
 
-% --- Executes on button press in pushbutton63.
-function pushbutton63_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton63 (see GCBO)
+% --- Executes on button press in btnListFiles.
+function btnListFiles_Callback(hObject, eventdata, handles)
+% hObject    handle to btnListFiles (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+S_trialset = file2struct(get_str_(handles.editTrialSet));
+[csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
 
-% --- Executes on button press in pushbutton64.
-function pushbutton64_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton64 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
+fprintf('\n[Folders]\n');
+disp(csDir_trial');
+
+csFiles_Track = find_files_(csDir_trial, '*_Track.mat');
+fprintf('\n[Files]\n');
+disp(csFiles_Track')
+msgbox(csDir_trial', 'Directories');
+% msgbox(csFiles', 'Files');
+
+
+function [csFiles, csDir] = find_files_(csDir, vcFile)
+if ischar(csDir)
+    if any(csDir=='*')
+        csDir = find_dir_(csDir);
+    else
+        csDir = {csDir}; 
+    end
+end
+csFiles = {};
+for iDir=1:numel(csDir)
+    S_dir_ = dir(fullfile(csDir{iDir}, vcFile));
+    csFiles_ = cellfun(@(x,y)fullfile(x,y), {S_dir_.folder}, {S_dir_.name}, 'UniformOutput', 0);
+    csFiles = [csFiles, csFiles_];
+end %for
+
+
+function csDir = find_dir_(vcDir)
+S_dir = dir(vcDir);
+csDir = {S_dir.name};
+csFolder = {S_dir.folder};
+
+csDir_ = csDir([S_dir.isdir]);
+csFolder = csFolder([S_dir.isdir]);
+csDir = cellfun(@(x,y)fullfile(x,y), csFolder, csDir_, 'UniformOutput', 0);
+
+
+function vc = get_str_(hObj)
+try
+    vc = get(hObj, 'String');
+catch
+    vc = '';
+end
 
 
 % --- Executes on button press in pushbutton65.
@@ -1451,3 +1510,17 @@ end
 
 function vi=trim_(vi, a, b)
 vi = vi(vi>=a & vi<=b);
+
+
+% --- Executes on button press in pushbutton73.
+function pushbutton73_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton73 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton74.
+function pushbutton74_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton74 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
