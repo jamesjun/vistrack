@@ -1,6 +1,10 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab, 2018/7/10
 
+[v0.1.4]
+Fixed update error
+Fixed tracking error
+
 [v0.1.3]
 xyLED (LED coordinate) is detected automatically
 ADC recording doesn't need to be present

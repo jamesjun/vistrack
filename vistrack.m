@@ -91,8 +91,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.1.3';
-vcDate = '7/11/2018';
+vcVer = 'v0.1.4';
+vcDate = '7/12/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
 end
@@ -349,7 +349,7 @@ if ~exist_dir_('.git')
     return; 
 end
 if nargin<1, vcVersion = ''; end
-
+delete('settings_vistrack.m');
 repoURL = 'https://github.com/jamesjun/vistrack';
 try
     if isempty(vcVersion)

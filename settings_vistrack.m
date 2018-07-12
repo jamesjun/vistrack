@@ -16,15 +16,13 @@ winlen = 128*2.5; %Tracking window length in pixels
 IM_MINCONTRAST = .02; %Minimum contrast difference threshold
 ThreshLim = [0 30]; % Minimum and maximum adaptive intensity threshold
 BW_SMOOTH = 5; % Edge smoothing size
-TRACK_SHOW = 1; %show tracking result, 50% faster
-
+TRACK_SHOW = 0; %show tracking result, 50% faster
 %# Plotting parameters
 TRAJ_NFILT = 3; %Smoothing window
 TRAJ_STEP = 8; %number of frames to skip
 EODR_SR = 15; %Sampling rate for EOD Rate display
 ADC_CH_PLOT = 702; %spike2 channel to plot
 REPLAY_STEP = 4;
-
 %# Movie output parameters
 INTENSITY_LIM = [40, 120]; %intensity display range
 MOV_TimeWin = [-2, 2]; %time bar display range

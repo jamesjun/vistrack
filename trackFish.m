@@ -230,7 +230,7 @@ if nargin < 3
     WINPOS = [1, size(IMG, 2), 1, size(IMG,1)];
 end
 
-img = IMG(WINPOS(3):WINPOS(4), WINPOS(1):WINPOS(2), :, iF);
+img = IMG(WINPOS(3):WINPOS(4), WINPOS(1):WINPOS(2), 1, iF);
 
 % Calculate the intensity difference (background subtraction)
 if nargout >= 2
