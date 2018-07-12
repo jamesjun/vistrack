@@ -1387,7 +1387,7 @@ function pushbutton70_Callback(hObject, eventdata, handles)
 
 function [FLIM, TC, img1, img00] = mov_flim_(vidobj, nFrames_skip)
 if nargin<2, nFrames_skip = []; end % skip every 10 frames
-if isempty(nFrames_skip), nFrames_skip = 60; end
+if isempty(nFrames_skip), nFrames_skip = 75; end
 warning off;
 nFrames = vidobj.NumberOfFrames;
 TC = linspace(0, vidobj.Duration, nFrames);
@@ -1403,7 +1403,7 @@ frame_first = viF(str2num(csAns{1}));
 frame_last = viF(str2num(csAns{2}));
 
 % Find first frame to track
-viF_first = min(max(frame_first + (-150:149),1),nFrames);
+viF_first = trim_(frame_first + (-150:149), 1, nFrames);
 tmr = read_(vidobj, viF_first);
 implay(tmr);
 uiwait(msgbox('Find the first frame to track and background, and close the movie'));
@@ -1414,7 +1414,7 @@ img00 = tmr(:,:,str2num(csAns{2}));
 frame_first = viF_first(str2num(csAns{1}));
 
 % Find last frame to track
-viF_last = min(max(frame_last + (-150:149),1),nFrames);
+viF_last = trim_(frame_last + (-150:149), 1, nFrames);
 tmr = read_(vidobj, viF_last);
 implay(tmr);
 uiwait(msgbox('Find the last frame to track, and close the movie'));
@@ -1423,7 +1423,7 @@ csAns = inputdlg({'Last frame'}, 'Get frames', 1, ...
 frame_last = viF_last(str2num(csAns{1}));
 
 FLIM = [frame_first, frame_last];
-
+TC = TC(frame_first:frame_last);
 
 function close_(h)
 try close(h); catch; end
@@ -1447,3 +1447,7 @@ for i=1:numel(csField)
         S_save.(csField{i}) = []; % not copied
     end
 end
+
+
+function vi=trim_(vi, a, b)
+vi = vi(vi>=a & vi<=b);

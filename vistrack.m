@@ -91,7 +91,7 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.1.4';
+vcVer = 'v0.1.5';
 vcDate = '7/12/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);

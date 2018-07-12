@@ -11,12 +11,12 @@ ADC_CH_ESAC = 401; %ESAC chan
 %TLIM = [317, 347]; %time range to track, [317, 634] (optional override)
 % xyLED = [1554, 563]; % deprecated since v0.1.3
 %# Image processing parameters
-IM_THRESH = 20; % Initial threshold
+IM_THRESH = 40; % Initial threshold
 winlen = 128*2.5; %Tracking window length in pixels
 IM_MINCONTRAST = .02; %Minimum contrast difference threshold
 ThreshLim = [0 30]; % Minimum and maximum adaptive intensity threshold
 BW_SMOOTH = 5; % Edge smoothing size
-TRACK_SHOW = 0; %show tracking result, 50% faster
+TRACK_SHOW = 1; %show tracking result, 50% faster
 %# Plotting parameters
 TRAJ_NFILT = 3; %Smoothing window
 TRAJ_STEP = 8; %number of frames to skip
