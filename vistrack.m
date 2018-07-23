@@ -25,8 +25,12 @@ switch lower(vcCmd)
     case 'edit', edit_(vcArg1); 
     case 'unit-test', unit_test_(vcArg1);    
     case 'update', update_(vcArg1);
-    
-    case 'measure_trials', [varargout{1}, varargout{2}] = measure_trials_(vcArg1, vcArg2);
+    case 'summary', varargout{1} = summary_(vcArg1);
+    case 'export', export_(vcArg1);
+    case 'videoreader', varargout{1} = VideoReader_(vcArg1);
+        
+    case 'trialset-list', trialset_list_(vcArg1);    
+    case 'trialset-learningcurve', trialset_learningcurve_(vcArg1);
         
     otherwise, help_();
 end %switch
@@ -35,6 +39,70 @@ if fReturn, return; end
 end %func
 
 
+%--------------------------------------------------------------------------
+function csMsg = summary_(handles)
+t_dur = diff(handles.TC([1,end]));
+[mrXYh_cam, vrT_cam] = get_traj_(handles);
+[pathLen_cm, XH, YH, TC1] = trial_pathlen_(handles);
+% [~, dataID, ~] = fileparts(handles.vidFname);
+handles.vcVer = get_set_(handles, 'vcVer', 'pre v0.1.7');
+handles.vcVer_date = get_set_(handles, 'vcVer_date', 'pre 7/20/2018');
+
+vcFile_trial = get_(handles, 'editResultFile', 'String');
+[vcFile_trial, S_dir] = fullpath_(vcFile_trial);
+dataID = strrep(S_dir.name, '_Track.mat', '');
+
+nDaysAgo = floor(now() - get_(S_dir, 'datenum'));
+
+csMsg = {...
+    sprintf('DataID: %s', dataID); 
+    sprintf('  duration: %0.3f sec', t_dur); 
+    sprintf('  path-length: %0.3f m', pathLen_cm/100); 
+    sprintf('  ave. speed: %0.3f m/s', pathLen_cm/100/t_dur); 
+    sprintf('  -----');    
+    sprintf('  Output file: %s', vcFile_trial);
+    sprintf('  Date analyzed: %s (%d days ago)', get_(S_dir, 'date'), nDaysAgo);
+    sprintf('  version used: %s (%s)', handles.vcVer, handles.vcVer_date);
+    sprintf('  -----');
+    sprintf('  Video file: %s', get_(handles, 'vidFname'));   
+    sprintf('  ADC file: %s', get_(handles, 'editADCfile', 'String')); 
+    sprintf('  ADC_TS file: %s', get_(handles, 'editADCfileTs', 'String'));   
+};
+% csMsg = [csMsg; get_(handles, 'csSettings')];
+if nargout==0, disp(csMsg); end
+end %func
+
+
+%--------------------------------------------------------------------------
+% Retreive full path of a file
+function [vcFile_full, S_dir] = fullpath_(vcFile)
+vcFile_full = [];
+S_dir = file_dir_(vcFile);
+if isempty(S_dir), return; end
+if numel(S_dir)~=1, vcFile_full = vcFile; return; end
+vcFile_full = fullfile(S_dir.folder, S_dir.name);
+end %func
+
+
+%--------------------------------------------------------------------------
+function S_dir = file_dir_(vcFile_trial)
+if exist_file_(vcFile_trial)
+    S_dir = dir(vcFile_trial);    
+else
+    S_dir = [];
+end
+end %func
+
+%--------------------------------------------------------------------------
+function [mrXY_head, vrT] = get_traj_(handles)
+P = load_settings_(handles);
+Xs = filtPos(handles.XC, P.TRAJ_NFILT, 1);
+Ys = filtPos(handles.YC, P.TRAJ_NFILT, 1);
+mrXY_head = [Xs(:,2), Ys(:,2)];
+vrT = get_(handles, 'TC');
+end %func
+
+        
 %--------------------------------------------------------------------------
 function commit_(vcDir_target)
 if nargin<1, vcDir_target = 'D:\Dropbox\Git\vistrack\'; end
@@ -92,8 +160,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.1.6';
-vcDate = '7/12/2018';
+vcVer = 'v0.1.7';
+vcDate = '7/23/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
 end
@@ -627,37 +695,183 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function [cvrPathLen, cvrDuration] = measure_trials_(csFiles, csAnimals)
+% 7/19/18: Copied from jrc3.m
+function val = get_set_(S, vcName, def_val)
+% set a value if field does not exist (empty)
+
+if isempty(S), S = get(0, 'UserData'); end
+if isempty(S), val = def_val; return; end
+if ~isstruct(S)
+    val = []; 
+    fprintf(2, 'get_set_: %s must be a struct\n', inputname(1));
+    return;
+end
+val = get_(S, vcName);
+if isempty(val), val = def_val; end
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/19/18: Copied from jrc3.m
+function varargout = get_(varargin)
+% retrieve a field. if not exist then return empty
+% [val1, val2] = get_(S, field1, field2, ...)
+% val = get_(S, 'struct1', 'struct2', 'field');
+
+if nargin==0, varargout{1} = []; return; end
+S = varargin{1};
+if isempty(S), varargout{1} = []; return; end
+if nargout==1 && nargin > 2
+    varargout{1} = get_recursive_(varargin{:}); return;
+end
+
+for i=2:nargin
+    vcField = varargin{i};
+    try
+        varargout{i-1} = S.(vcField);
+    catch
+        varargout{i-1} = [];
+    end
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function out = get_recursive_(varargin)
+
+% recursive get
+out = [];
+if nargin<2, return; end
+S = varargin{1};
+for iField = 2:nargin
+    try
+        out = S.(varargin{iField});
+        if iField == nargin, return; end
+        S = out;
+    catch
+        out = [];
+    end
+end % for
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/19/2018
+function P = load_settings_(handles)
+% P = load_settings_()
+% P = load_settings_(handles)
+
+P = file2struct('default.cfg');
+P.vcFile_settings = get_set_(P, 'vcFile_settings', 'settings_vistrack.m');
+P.pixpercm = get_set_(P, 'pixpercm', 7.238);
+P.angXaxis = get_set_(P, 'angXaxis', -0.946);
+
+P_ = [];
+try    
+    csSettings = get(handles.editSettings, 'String');
+    P_ = file2struct(csSettings);
+catch
+    P_ = file2struct(P.vcFile_settings);
+end
+P = struct_merge_(P, P_);
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/19/2018 JJJ: Copied from jrc3.m
+function P = struct_merge_(P, P1, csNames)
+% Merge second struct to first one
+% P = struct_merge_(P, P_append)
+% P = struct_merge_(P, P_append, var_list) : only update list of variable names
+if isempty(P), P=P1; return; end % P can be empty
+if isempty(P1), return; end
+if nargin<3, csNames = fieldnames(P1); end
+if ischar(csNames), csNames = {csNames}; end
+
+for iField = 1:numel(csNames)
+    vcName_ = csNames{iField};
+    if isfield(P1, vcName_), P.(vcName_) = P1.(vcName_); end
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function trialset_learningcurve_(vcFile_trialset)
 
 % iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
-pixpercm = 7.238; % run S141106_LearningCurve_Control.m first cell
-angXaxis = -0.946;
+% run S141106_LearningCurve_Control.m first cell
 
-for iAnimal = 1:numel(csAnimals)
-    vcAnimal = csAnimals{iAnimal};
-    [~, csFiles_, ~] = cellfun(@(x)fileparts(x), csFiles, 'UniformOutput', 0);
-    vi_ = cellfun(@(x)x(4) == vcAnimal(1), csFiles_) & cellfun(@(x)lower(x(6)) ~= 'p', csFiles_);
-    csFiles_ = csFiles(vi_);
-    [vrPathLen_, vrDuration_] = deal(nan(size(csFiles_)));
-    fprintf('\nLoading animal %s\n\t', vcAnimal);
-    for iTrial = 1:numel(csFiles_)
-        try
-%             S_ = importTrial(csFiles_{iTrial}, angXaxis, pixpercm);
-            S_ = load(csFiles_{iTrial});
-            vrPathLen_(iTrial) = trial_pathlen_(S_, pixpercm, angXaxis);
-            vrDuration_(iTrial) = diff(S_.TC([1,end]));
-            fprintf('.');
-        catch
-            disp(lasterr());
-        end
-    end %for
-    [cvrPathLen{iTrial}, cvrDuration{iTrial}] = deal(vrPathLen_, vrDuration_);
+S_trialset = load_trialset_(vcFile_trialset);
+[pixpercm, angXaxis] = struct_get_(S_trialset.P, 'pixpercm', 'angXaxis');
+[tiImg, vcType_uniq, vcAnimal_uniq, viImg, csFiles_Track] = ...
+    struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'viImg', 'csFiles_Track');
+
+[trDur, trPath] = deal(nan(size(tiImg)));
+fprintf('Analyzing\n\t');
+t1 = tic;
+for iTrial = 1:numel(viImg)    
+    try
+        if S_trialset.vlProbe(iTrial), continue; end
+        S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'xy0', 'vidFname');
+        iImg_ = viImg(iTrial);
+        trPath(iImg_) = trial_pathlen_(S_, pixpercm, angXaxis);
+        trDur(iImg_) = diff(S_.TC([1,end]));
+        fprintf('.');
+    catch
+        disp(csFiles_Track{iTrial});
+    end
 end %for
+fprintf('\n\ttook %0.1fs\n', toc(t1));
+
+% compact by removing nan. 
+% date x session x animal (trPath,trDur) -> session x date x animal (trPath_,trDur_)
+[nDates, nSessions, nAnimals] = size(tiImg);
+[trPath_, trDur_] = deal(nan(nSessions, nDates, nAnimals));
+for iAnimal = 1:size(tiImg,3)
+    [mrPath1, mrDur1] = deal(trPath(:,:,iAnimal)', trDur(:,:,iAnimal)');
+    vi1 = find(~isnan(mrPath1));
+    vi2 = 1:numel(vi1);
+    [mrPath2, mrDur2] = deal(nan(nSessions, nDates));
+    [mrPath2(vi2), mrDur2(vi2)] = deal(mrPath1(vi1), mrDur1(vi1));    
+    trPath_(:,:,iAnimal) = mrPath2;
+    trDur_(:,:,iAnimal) = mrDur2;
+end
+[trPath_, trDur_] = deal(permute(trPath_,[1,3,2]), permute(trDur_,[1,3,2]));
+[mrPath, mrDur] = deal(reshape(trPath_,[],nDates)/100, reshape(trDur_,[],nDates));
+viCol = find(~any(isnan(mrPath)));
+[mrPath, mrDur] = deal(mrPath(:,viCol), mrDur(:,viCol));
+
+figure; set(gcf,'Name',vcFile_trialset,'Color','w');
+subplot 211; errorbar_iqr_(mrPath); ylabel('Dist (m)'); grid on; xlabel('Session #');
+subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');
+end %func
+
+
+%--------------------------------------------------------------------------
+function mr_ = errorbar_iqr_(mr)
+mr_ = quantile_(mr, [.25,.5,.75]);
+errorbar(1:size(mr_,1), mr_(:,2), mr_(:,2)-mr_(:,1), mr_(:,3)-mr_(:,2));
+set(gca, 'XLim', [.5, size(mr_,1)+.5]);
+end %func
+
+
+%--------------------------------------------------------------------------
+function mr1 = quantile_(mr, vrQ)
+mr1 = zeros(numel(vrQ), size(mr,2), 'like', mr);
+for i=1:size(mr,2)
+    mr1(:,i) = quantile(mr(:,i), vrQ);
+end
+mr1 = mr1';
 end %func
 
 
 %--------------------------------------------------------------------------
 function [pathLen_cm, XH, YH, TC1] = trial_pathlen_(S_trial, pixpercm, angXaxis)
+if nargin<2
+    P = load_settings_();
+    [pixpercm, angXaxis] = deal(P.pixpercm, P.angXaxis);
+end %if
+
 [TC, XHc, YHc] = deal(S_trial.TC, S_trial.XC(:,2), S_trial.YC(:,2));
 TC1 = linspace(TC(1), TC(end), numel(TC)*10);
 XH = interp1(TC, XHc, TC1, 'spline');
@@ -690,4 +904,231 @@ iAnimal = fishID - 'A' + 1;
 rotMat = rotz(angXaxis);    rotMat = rotMat(1:2, 1:2);
 xyStart = (xyStart * rotMat) .* [1, -1] * pixpercm + S_trial.xy0; %convert to pixel unit
 xyFood = (xyFood * rotMat) .* [1, -1] * pixpercm + S_trial.xy0; %convert to pixel unit
+end %func
+
+
+%--------------------------------------------------------------------------
+function export_(handles)
+assignWorkspace_(handles);
+msgbox('"handles" struct assigned in workspace.');
+disp(handles);
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/20/2018 JJJ: list trialset files
+function trialset_list_(vcFile_trialset)
+
+S_trialset = load_trialset_(vcFile_trialset);
+[tiImg, vcType_uniq, vcAnimal_uniq, csDir_trial, csFiles_Track] = ...
+    struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'csDir_trial', 'csFiles_Track');
+
+% output
+msgbox(S_trialset.csMsg, file_part_(vcFile_trialset));
+disp_cs_(S_trialset.csMsg);
+disp_cs_(S_trialset.csMsg2);
+
+figure; set(gcf, 'Name', vcFile_trialset, 'Color', 'w');
+for iAnimal = 1:size(tiImg,3)
+    subplot(1,size(tiImg,3),iAnimal);
+    imagesc_(tiImg(:,:,iAnimal));
+    ylabel('Dates'); xlabel('Trials'); 
+    title(sprintf('Animal %s', S_trialset.vcAnimal_uniq(iAnimal)));    
+end %for
+end %func
+
+
+%--------------------------------------------------------------------------
+function varargout = struct_get_(varargin)
+% deal struct elements
+
+if nargin==0, varargout{1} = []; return; end
+S = varargin{1};
+if isempty(S), varargout{1} = []; return; end
+
+for i=2:nargin
+    vcField = varargin{i};
+    try
+        varargout{i-1} = S.(vcField);
+    catch
+        varargout{i-1} = [];
+    end
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function S_trialset = load_trialset_(vcFile_trialset)
+
+S_trialset = file2struct(vcFile_trialset);
+P = load_settings_();
+[csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
+% csFiles_Track = find_files_(csDir_trial, '*_Track.mat');
+
+[csDataID, S_trialset_]  = get_dataid_(csFiles_Track);
+S_trialset = struct_merge_(S_trialset, S_trialset_);
+[vcAnimal_uniq, vnAnimal_uniq] = unique_(S_trialset.vcAnimal);
+[viDate_uniq, vnDate_uniq] = unique_(S_trialset.viDate);
+[vcType_uniq, vnType_uniq] = unique_(S_trialset.vcType);
+[viTrial_uniq, vnTrial_uniq] = unique_(S_trialset.viTrial);
+fh1_ = @(x,y,z)cell2mat(arrayfun(@(a,b)sprintf(z,a,b),x,y,'UniformOutput',0));
+fh2_ = @(cs_)cell2mat(cellfun(@(vc_)sprintf('  %s\n',vc_),cs_,'UniformOutput',0));
+csMsg = { ...
+    sprintf('Trial types(#trials): %s\n', fh1_(vcType_uniq, vnType_uniq, '%c(%d), '));    
+    sprintf('Animals(#trials): %s\n', fh1_(vcAnimal_uniq, vnAnimal_uniq, '%c(%d), '));
+    sprintf('Dates(#trials):\n  %s\n', fh1_(viDate_uniq, vnDate_uniq, '%d(%d), '));
+    sprintf('# Probe trials: %d', sum(S_trialset.vlProbe));
+    sprintf('%s', fh2_(csFiles_Track(S_trialset.vlProbe)));
+    sprintf('Figure color scheme: blue:no data, green:analyzed, yellow:probe trial');    
+    sprintf('See the console output for further details');    
+};
+
+% image output
+tiImg = zeros(max(viDate_uniq), max(viTrial_uniq), numel(vcAnimal_uniq));
+viDate = S_trialset.viDate;
+viAnimal = S_trialset.vcAnimal - min(S_trialset.vcAnimal) + 1;
+viTrial = S_trialset.viTrial;
+viImg = sub2ind(size(tiImg), viDate, viTrial, viAnimal);
+tiImg(viImg) = 1;
+tiImg(viImg(S_trialset.vlProbe)) = 2;
+
+% find missing trials
+[viDate_missing, viTrial_missing, viAnimal_missing] = ind2sub(size(tiImg), find(tiImg==0));
+csDataID_missing = arrayfun(@(a,b,c)sprintf('%c%02d%c%d',vcType_uniq(1),a,b,c), ...
+    viDate_missing, vcAnimal_uniq(viAnimal_missing)', viTrial_missing, ...
+        'UniformOutput', 0);
+
+fh3_ = @(cs)(cell2mat(cellfun(@(x)sprintf('  %s\n',x),cs, 'UniformOutput', 0)));
+fh4_ = @(cs)(cell2mat(cellfun(@(x)sprintf('%s ',x),cs, 'UniformOutput', 0)));
+
+% secondary message 
+csMsg2 = { ...
+    sprintf('\n[Folders]');
+    fh3_(csDir_trial);
+    sprintf('[Files]');
+    fh3_(csFiles_Track);
+    sprintf('[Probe trials]');
+    fh2_(csFiles_Track(S_trialset.vlProbe));
+    sprintf('[Missing trials (%d)]', numel(csDataID_missing));
+    ['  ', fh4_(sort(csDataID_missing'))]
+};
+
+S_trialset = struct_add_(S_trialset, P, ...
+    csFiles_Track, csDir_trial, csMsg, csMsg2, ...
+    tiImg, viDate, viTrial, viAnimal, viImg, ...
+    vcAnimal_uniq, viDate_uniq, vcType_uniq, viTrial_uniq);
+end %func
+
+
+%--------------------------------------------------------------------------
+function S = struct_add_(S, varargin)
+
+for i=1:numel(varargin)
+    S.(inputname(i+1)) = varargin{i};
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function imagesc_(mr)
+imagesc(mr, 'xdata', 1:size(mr,2), 'ydata', 1:size(mr,1));
+set(gca,'XTick', 1:size(mr,2)); 
+set(gca,'YTick', 1:size(mr,1));
+axis([.5, size(mr,2)+.5, .5, size(mr,1)+.5]);
+grid on;
+end %func
+
+
+%--------------------------------------------------------------------------
+function vc = file_part_(vc)
+[~,a,b] = fileparts(vc);
+vc = [a, b];
+end %func
+
+
+%--------------------------------------------------------------------------
+function [vi_uniq, vn_uniq] = unique_(vi)
+[vi_uniq, ~, vi_] = unique(vi);
+vn_uniq = hist(vi_, 1:numel(vi_uniq));
+end %func
+
+
+%--------------------------------------------------------------------------
+function [csDataID, S]  = get_dataid_(csFiles)
+csDataID = cell(size(csFiles));
+[viDate, viTrial] = deal(zeros(size(csFiles)));
+vlProbe = false(size(csFiles));
+[vcType, vcAnimal] = deal(repmat(' ', size(csFiles)));
+for iFile=1:numel(csFiles)
+    [~, vcFile_, ~] = fileparts(csFiles{iFile});
+    vcDateID_ = strrep(vcFile_, '_Track', '');
+    csDataID{iFile} = vcDateID_;    
+    vcType(iFile) = vcDateID_(1);
+    vcAnimal(iFile) = vcDateID_(4);
+    viDate(iFile) = str2num(vcDateID_(2:3));
+    viTrial(iFile) = str2num(vcDateID_(5));
+    vlProbe(iFile) = numel(vcDateID_) > 5;
+end %for
+S = makeStruct_(vcType, viDate, vcAnimal, viTrial, vlProbe);
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/20/18: Copied from jrc3.m
+function S = makeStruct_(varargin)
+%MAKESTRUCT all the inputs must be a variable. 
+%don't pass function of variables. ie: abs(X)
+%instead create a var AbsX an dpass that name
+S = struct();
+for i=1:nargin, S.(inputname(i)) =  varargin{i}; end
+end %func
+
+
+%--------------------------------------------------------------------------
+function [csFiles, csDir] = find_files_(csDir, vcFile)
+if ischar(csDir)
+    if any(csDir=='*')
+        csDir = find_dir_(csDir);
+    else
+        csDir = {csDir}; 
+    end
+end
+csFiles = {};
+for iDir=1:numel(csDir)
+    S_dir_ = dir(fullfile(csDir{iDir}, vcFile));
+    csFiles_ = cellfun(@(x,y)fullfile(x,y), {S_dir_.folder}, {S_dir_.name}, 'UniformOutput', 0);
+    csFiles = [csFiles, csFiles_];
+end %for
+end %func
+
+
+%--------------------------------------------------------------------------
+function csDir = find_dir_(vcDir)
+S_dir = dir(vcDir);
+csDir = {S_dir.name};
+csFolder = {S_dir.folder};
+
+csDir_ = csDir([S_dir.isdir]);
+csFolder = csFolder([S_dir.isdir]);
+csDir = cellfun(@(x,y)fullfile(x,y), csFolder, csDir_, 'UniformOutput', 0);
+end %func
+
+
+%--------------------------------------------------------------------------
+function vidobj = VideoReader_(vcFile_vid, nRetry)
+if nargin<2, nRetry = []; end
+if isempty(nRetry), nRetry = 3; end % number of frames can change
+
+fprintf('Loading Video: %s\n', vcFile_vid); t1=tic;
+cVidObj = cell(nRetry,1);
+for iRetry = 1:nRetry
+    vidobj = VideoReader(vcFile_vid);
+    vnFrames(iRetry) = vidobj.NumberOfFrames;
+    cVidObj{iRetry} = vidobj;
+    fprintf('\t#%d: %d frames\n', iRetry, vnFrames(iRetry));
+end %for
+[NumberOfFrames, iMax] = max(vnFrames);
+vidobj = cVidObj{iMax};
+
+fprintf('\ttook %0.1fs\n', toc(t1));
 end %func

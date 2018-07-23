@@ -1,12 +1,22 @@
-function S_file2struct = file2struct(vcFile_file2struct)
-% James Jun 2017 May 23
+% James Jun 
+% 7/19/2018: Can pass cell strings to evaluate
+% 2017 May 23
 % Run a text file as .m script and result saved to a struct P
 % _prm and _prb can now be called .prm and .prb files
+
+function S_file2struct = file2struct(vcFile_file2struct)
+% S_file2struct = file2struct(vcFile_txt)
+% S_file2struct = file2struct(csLines)
+
 S_file2struct = []; 
-if ~exist_file_(vcFile_file2struct), return; end
-    
-% load text file. trim and line break. remove comments.  replace 
-csLines_file2struct = file2lines_(vcFile_file2struct);
+if iscell(vcFile_file2struct)
+    csLines_file2struct = vcFile_file2struct;
+    vcFile_file2struct = '';
+else % file name is passed
+    if ~exist_file_(vcFile_file2struct), return; end    
+    csLines_file2struct = file2lines_(vcFile_file2struct);
+end
+
 csLines_file2struct = strip_comments_(csLines_file2struct);
 if isempty(csLines_file2struct), return; end
 

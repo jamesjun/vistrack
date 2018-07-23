@@ -10,6 +10,7 @@ ADC_CH_ESAC = 401; %ESAC chan
 %TLIM = [317, 347]; %time range to track, [317, 634] (optional override)
 %TLIM = [317, 347]; %time range to track, [317, 634] (optional override)
 % xyLED = [1554, 563]; % deprecated since v0.1.3
+
 %# Image processing parameters
 IM_THRESH = 40; % Initial threshold
 winlen = 128*2.5; %Tracking window length in pixels
@@ -17,16 +18,19 @@ IM_MINCONTRAST = .02; %Minimum contrast difference threshold
 ThreshLim = [0 30]; % Minimum and maximum adaptive intensity threshold
 BW_SMOOTH = 5; % Edge smoothing size
 TRACK_SHOW = 1; %show tracking result, 50% faster
+
 %# Plotting parameters
 TRAJ_NFILT = 3; %Smoothing window
 TRAJ_STEP = 8; %number of frames to skip
 EODR_SR = 15; %Sampling rate for EOD Rate display
 ADC_CH_PLOT = 702; %spike2 channel to plot
 REPLAY_STEP = 4;
+
 %# Movie output parameters
 INTENSITY_LIM = [40, 120]; %intensity display range
 MOV_TimeWin = [-2, 2]; %time bar display range
 MOV_FILEOUT = 'output.mp4'; %video output file name
+
 %# Sound output parameters
 WAV_Fs = 8000;
 WAV_FILEOUT = 'output.wav';

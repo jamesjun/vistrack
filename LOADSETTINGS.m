@@ -6,3 +6,6 @@ try
 catch
     eval('settings_vistrack');
 end
+
+% Default values
+if exist('REPLAY_STEP', 'var') ~= 1, REPLAY_STEP = 4; end

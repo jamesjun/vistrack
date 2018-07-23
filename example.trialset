@@ -1,6 +1,9 @@
 
-vcFile_track = 'D:\Aida\2014b_ShuffleCue\*_Track.mat';
+vcDir = 'G:\JunSpatial_Simone\Cue\';
 csAnimals = {'A','B','C','D'};
-fProbeTrial = 0;
 csDir_excl = {};
 csFile_excl = {};
+viEarly_trial = 1:2;
+viLate_trial = 7:11;
+
+% vcFile_xls = 'G:\JunSpatial_Simone\MATLAB analysis track sheet.xls';

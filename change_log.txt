@@ -1,5 +1,14 @@
 Visual Tracker (vistrack) change log
-  James Jun, Maler Lab, 2018/7/10
+  James Jun, Maler Lab
+
+[v0.1.7, 7/23/2018]
+Added "Summary" button in GUI
+Added "Export" button in GUI
+Robust video loading, number of frames calculated 3 times and max is taken.
+Updated "List Files" button for Trialset
+Added "Learning Curve" button for Trialset
+Settings box now displays new lines
+Faster video loading (~2x, requires a "Distrib_Computing_Toolbox")
 
 [v0.1.6]
 Added .trialset file loading

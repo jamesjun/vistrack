@@ -25,7 +25,7 @@ switch mode
     end
 end
 
-h=msgbox('Loading... (this will close automatically)');       
+h=msgbox('Loading... (this will close automatically)', 'detect LED blink'); drawnow;    
 trImg = read(handles.vidobj, FLIM1);
 trImg = squeeze(trImg(:,:,1,:));
 try close(h); catch, end;

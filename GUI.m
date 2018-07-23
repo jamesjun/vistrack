@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 12-Jul-2018 17:40:09
+% Last Modified by GUIDE v2.5 23-Jul-2018 16:44:51
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -56,7 +56,8 @@ function GUI_OpeningFcn(hObject, eventdata, handles, varargin)
 handles.output = hObject;
 
 % Update settings window
-csSettings = importdata('settings_vistrack.m', '\n');
+% csSettings = importdata('settings_vistrack.m', '\n');
+csSettings = file2cellstr_('settings_vistrack.m');
 set(handles.editSettings, 'String', csSettings);
 
 [vcVer, vcVer_date] = version_();
@@ -71,6 +72,15 @@ guidata(hObject, handles);
 
 % UIWAIT makes GUI wait for user response (see UIRESUME)
 % uiwait(handles.figure1);
+
+
+function csLines = file2cellstr_(vcFile)
+% read text file to a cell string
+fid = fopen(vcFile, 'r');
+csLines = {};
+while ~feof(fid), csLines{end+1} = fgetl(fid); end
+fclose(fid);
+csLines = csLines';
 
 
 % --- Outputs from this function are returned to the command line.
@@ -122,6 +132,7 @@ if ~exist_file_(vidFname)
     vidFname = fullfile(PathName, FileName);
 end
 handles.vidFname = vidFname;
+buttons_off_(handles);
 
 % Set result field
 vcFile_out = subsFileExt_(vidFname, '_Track.mat');
@@ -133,7 +144,7 @@ if exist_file_(vcFile_out)
             set(handles.btnSync, 'Enable', 'off');
             set(handles.btnBackground, 'Enable', 'off');
             set(handles.btnTrack, 'Enable', 'off');
-            set(handles.btnPreview, 'Enable', 'off');
+            set(handles.btnPreview, 'Enable', 'off');            
             set(handles.btnSave, 'Enable', 'on');
             set(handles.panelPlot, 'Visible', 'on');  
             return;
@@ -145,12 +156,17 @@ else
     set(handles.editResultFile, 'String', '');
 end
 
-try        
+try      
     set(handles.edit1, 'String', handles.vidFname);
     h = msgbox('Loading... (this will close automatically)');
-    handles.vidobj = VideoReader(handles.vidFname);
-    handles.vidobj
-    try close(h); catch, end;   
+%     handles.vidobj = VideoReader(handles.vidFname);
+    handles.vidobj = vistrack('VideoReader', vidFname);
+    fprintf('Video file info: %s\n', handles.vidFname);
+    disp(handles.vidobj);
+%     fprintf('Calculating number of frames...\n');
+    fprintf('\t# video frames: %d\n', handles.vidobj.NumberOfFrames);
+    close_(h);
+    
     set(handles.btnSync, 'Enable', 'on');
     set(handles.btnBackground, 'Enable', 'off');
     set(handles.btnTrack, 'Enable', 'off');
@@ -185,6 +201,14 @@ catch
     errordlg(lasterr);
 end
 
+
+function buttons_off_(handles)
+set(handles.btnSync, 'Enable', 'off');
+set(handles.btnBackground, 'Enable', 'off');
+set(handles.btnTrack, 'Enable', 'off');
+set(handles.btnPreview, 'Enable', 'off');
+set(handles.btnSave, 'Enable', 'off');
+set(handles.panelPlot, 'Visible', 'off');   
 
 
 function editSettings_Callback(hObject, eventdata, handles)
@@ -1052,14 +1076,8 @@ try
         'SE' ,'thresh' ,'AreaTarget' ,'WINPOS' ,'img0', ...
         'XC' ,'YC' ,'AC' ,'xy_names' ,'ang_names' ,'csSettings', ...
         'ADC', 'ADCTS', ...
-        'MOV', 'XC_off', 'YC_off', 'vidFname', 'ESAC'};
-    for i=1:numel(csFields)
-        try
-            eval(sprintf('handles.%s = S.%s;', csFields{i}, csFields{i}));
-        catch
-            ;
-        end
-    end        
+        'MOV', 'XC_off', 'YC_off', 'vidFname', 'ESAC', 'vcVer', 'vcVer_date'};
+    handles = struct_merge_(handles, S, csFields);    
 
     set(handles.edit1, 'String', handles.vidFname);
     set(handles.editADCfile, 'String', [handles.vidFname(1:end-4), '_Rs.mat']);
@@ -1091,23 +1109,27 @@ handles.ESAC = calcESAC(handles);
 
 %save file
 h = msgbox('Saving... (this will close automatically)');    
-S_save = copyStruct_(handles, {'TLIM0', 'FLIM0', 'FPS', ...
+S_save = struct_copy_(handles, {'TLIM0', 'FLIM0', 'FPS', ...
     'MASK' ,'xy_init' ,'vec0' ,'xy0' ,'TC' ,'TLIM' ,'FLIM' ,'img1' ,'img00', ...
     'SE' ,'thresh' ,'AreaTarget' ,'WINPOS' ,'img0', ...
     'XC' ,'YC' ,'AC' ,'xy_names' ,'ang_names' ,'csSettings', ...
     'ADC', 'ADCTS', ...
     'MOV', 'XC_off', 'YC_off', 'vidFname', 'ESAC'});
+[S_save.vcVer, S_save.vcVer_date] = vistrack('version');
+
+if exist_file_(handles.vidFname)
+    vcFile_mat = subsFileExt_(handles.vidFname, '_Track.mat');
+else
+    vcFile_mat = get(handles.editResultFile, 'String');
+end
 try
-    [pathstr, name, ext] = fileparts(handles.vidFname);
-    outfname = fullfile(pathstr, [name, '_Track.mat']);
-    eval(sprintf('save(''%s'', ''-struct'', ''S_save'');', outfname));
+    eval(sprintf('save(''%s'', ''-struct'', ''S_save'');', vcFile_mat));
 catch
-    outfname = get(handles.editResultFile, 'String');
-    eval(sprintf('save(''%s'', ''-struct'', ''S_save'');', outfname));
+    fprintf(2, 'Save file failed: %s\n', vcFile_mat);
 end
 close_(h);
-set(handles.editResultFile, 'String', outfname);
-msgbox_(sprintf('Output saved to %s', outfname));
+set(handles.editResultFile, 'String', vcFile_mat);
+msgbox_(sprintf('Output saved to %s', fullpath_(vcFile_mat)));
 
 
 % --- Executes during object creation, after setting all properties.
@@ -1214,7 +1236,12 @@ if nargin<2, fVerbose = 0; end
 if isempty(vcFile)
     flag = 0; 
 else
-    flag = ~isempty(dir(vcFile));
+    S_dir = dir(vcFile);
+    if numel(S_dir) == 1
+        flag = ~S_dir.isdir;
+    else
+        flag = 0;
+    end
 end
 if fVerbose && ~flag
     fprintf(2, 'File does not exist: %s\n', vcFile);
@@ -1287,13 +1314,18 @@ function btnLoadTrialSet_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 vcFile_trialset = get(handles.editTrialSet, 'String');
-[FileName,PathName,FilterIndex] = uigetfile('*.trialset', ...
-        'Select trialset', vcFile_trialset);
-if ~FilterIndex, return; end
-vcFile_trialset = fullfile(PathName, FileName);
+if ~exist_file_(vcFile_trialset)
+    [FileName,PathName,FilterIndex] = uigetfile('*.trialset', ...
+            'Select trialset', vcFile_trialset);
+    if ~FilterIndex, return; end
+    vcFile_trialset = fullfile(PathName, FileName);
+else
+    vcFile_trialset = fullpath_(vcFile_trialset);
+end
 set(handles.editTrialSet, 'String', vcFile_trialset);
 set(handles.panelTrialSet, 'Visible', 'on');
 edit(vcFile_trialset);
+msgbox(sprintf('Loaded %s', vcFile_trialset), 'Loading Trialset');
 
 
 % --- Executes on button press in btnEditTrialset.
@@ -1309,9 +1341,8 @@ function btnLearningCurve_Callback(hObject, eventdata, handles)
 % hObject    handle to btnLearningCurve (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-S_trialset = file2struct(get_str_(handles.editTrialSet));
-[csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
-[cvrPathLen, cvrDuration] = vistrack('measure_trials', csFiles_Track, S_trialset.csAnimals);
+vistrack('trialset-learningcurve', get_str_(handles.editTrialSet)); 
+% [cvrPathLen, cvrDuration] = vistrack('measure_trials', get_str_(handles.editTrialSet)); 
 
 
 % --- Executes on button press in btnSamplingDensity.
@@ -1354,44 +1385,7 @@ function btnListFiles_Callback(hObject, eventdata, handles)
 % hObject    handle to btnListFiles (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
-S_trialset = file2struct(get_str_(handles.editTrialSet));
-[csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
-
-fprintf('\n[Folders]\n');
-disp(csDir_trial');
-
-csFiles_Track = find_files_(csDir_trial, '*_Track.mat');
-fprintf('\n[Files]\n');
-disp(csFiles_Track')
-msgbox(csDir_trial', 'Directories');
-% msgbox(csFiles', 'Files');
-
-
-function [csFiles, csDir] = find_files_(csDir, vcFile)
-if ischar(csDir)
-    if any(csDir=='*')
-        csDir = find_dir_(csDir);
-    else
-        csDir = {csDir}; 
-    end
-end
-csFiles = {};
-for iDir=1:numel(csDir)
-    S_dir_ = dir(fullfile(csDir{iDir}, vcFile));
-    csFiles_ = cellfun(@(x,y)fullfile(x,y), {S_dir_.folder}, {S_dir_.name}, 'UniformOutput', 0);
-    csFiles = [csFiles, csFiles_];
-end %for
-
-
-function csDir = find_dir_(vcDir)
-S_dir = dir(vcDir);
-csDir = {S_dir.name};
-csFolder = {S_dir.folder};
-
-csDir_ = csDir([S_dir.isdir]);
-csFolder = csFolder([S_dir.isdir]);
-csDir = cellfun(@(x,y)fullfile(x,y), csFolder, csDir_, 'UniformOutput', 0);
+vistrack('trialset-list', get_str_(handles.editTrialSet));
 
 
 function vc = get_str_(hObj)
@@ -1444,13 +1438,16 @@ function pushbutton70_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 
-function [FLIM, TC, img1, img00] = mov_flim_(vidobj, nFrames_skip)
-if nargin<2, nFrames_skip = []; end % skip every 10 frames
-if isempty(nFrames_skip), nFrames_skip = 75; end
+function [FLIM, TC, img1, img00] = mov_flim_(vidobj, nFrames_load)
+if nargin<2, nFrames_load = 300; end % skip every 10 frames
+% if isempty(nFrames_skip), nFrames_skip = 75; end
 warning off;
 nFrames = vidobj.NumberOfFrames;
+% nFrames_skip = floor(nFrames / nFrames_load);
 TC = linspace(0, vidobj.Duration, nFrames);
-viF = 1:nFrames_skip:nFrames;
+% viF = 1:nFrames_skip:nFrames;
+viF = unique(round(linspace(1, nFrames, nFrames_load)));
+% viF = 1:nFrames_load; % much faster to load
 tmr = read_(vidobj, viF);    
 
 % rough scan
@@ -1489,16 +1486,12 @@ try close(h); catch; end
 
 
 function tmr = read_(vidobj, viF)
-h=msgbox('Loading video...');
-tmr = zeros(vidobj.Height, vidobj.Width, numel(viF), 'uint8');
-for iF1=1:numel(viF)
-    img = read(vidobj, viF(iF1));
-    tmr(:,:,iF1) = img(:,:,1);
-end
+h=msgbox('Loading video... (this will close automatically)'); drawnow;
+tmr = vid_read(vidobj, viF);
 close_(h);
 
 
-function S_save = copyStruct_(handles, csField)
+function S_save = struct_copy_(handles, csField)
 for i=1:numel(csField)
     try
         S_save.(csField{i}) = handles.(csField{i});
@@ -1524,3 +1517,58 @@ function pushbutton74_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbutton74 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in btnSummary.
+function btnSummary_Callback(hObject, eventdata, handles)
+% hObject    handle to btnSummary (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+csMsg = vistrack('summary', handles);
+disp_cs_(csMsg);
+msgbox(csMsg);
+
+
+% --- Executes on button press in btnExport.
+function btnExport_Callback(hObject, eventdata, handles)
+% hObject    handle to btnExport (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+vistrack('export', handles);
+
+
+%--------------------------------------------------------------------------
+% display cell string
+function disp_cs_(cs)
+cellfun(@(s)fprintf('%s\n',s), cs);
+
+
+%--------------------------------------------------------------------------
+% Retreive full path of a file
+function vcFile_full = fullpath_(vcFile)
+S_dir = dir(vcFile);
+if numel(S_dir)~=1, vcFile_full = vcFile; return ;end
+vcFile_full = fullfile(S_dir.folder, S_dir.name);
+
+
+
+%--------------------------------------------------------------------------
+% 7/20/2018 Copied from jrc3.m
+% If field doesn't exist copy empty
+function P = struct_merge_(P, P1, csNames)
+% Merge second struct to first one
+% P = struct_merge_(P, P_append)
+% P = struct_merge_(P, P_append, var_list) : only update list of variable names
+if isempty(P), P=P1; return; end % P can be empty
+if isempty(P1), return; end
+if nargin<3, csNames = fieldnames(P1); end
+if ischar(csNames), csNames = {csNames}; end
+
+for iField = 1:numel(csNames)
+    vcName_ = csNames{iField};
+    if isfield(P1, vcName_)
+        P.(vcName_) = P1.(vcName_); 
+    else
+        P.(vcName_) = [];
+    end
+end

@@ -14,7 +14,7 @@ fname_esac = sprintf('%s\\%s_EODA.mat', dirname, filename);
 try
     ADC_ESAC = load(fname_esac);
 catch
-    disp(lasterr);
+    disp('EODA not saved.');
     ESAC = [];
     return;
 end
