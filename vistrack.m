@@ -31,7 +31,7 @@ switch lower(vcCmd)
     case 'export', export_(vcArg1);
     case 'videoreader', varargout{1} = VideoReader_(vcArg1);
     case 'dependencies', disp_dependencies_();
-    case 'downloda-sample', download_sample_();
+    case 'download-sample', download_sample_();
         
     case 'trialset-list', trialset_list_(vcArg1);    
     case 'trialset-learningcurve', trialset_learningcurve_(vcArg1);
@@ -170,7 +170,7 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.1.8';
+vcVer = 'v0.1.9';
 vcDate = '7/24/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);

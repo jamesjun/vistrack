@@ -1,6 +1,9 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.1.9, 7/24/2018]
+Debugged "visrack download-sample" command
+
 [v0.1.8, 7/24/2018]
 GUI "Replay" window:
   Added "[G]oto frame" keyboard shortcut.
