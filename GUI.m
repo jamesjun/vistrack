@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 23-Jul-2018 16:44:51
+% Last Modified by GUIDE v2.5 24-Jul-2018 11:57:00
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -62,10 +62,7 @@ set(handles.editSettings, 'String', csSettings);
 
 [vcVer, vcVer_date] = version_();
 set(handles.textVer, 'String', sprintf('%s (%s) James Jun', vcVer, vcVer_date));
-
-if ~exist('.git', 'dir') ~= 7
-    set(handles.btnUpdate, 'Enable', 'off');
-end
+set(handles.btnUpdate, 'Enable', ifeq_(exist_dir_('.git'), 'on', 'off'));
     
 % Update handles structure
 guidata(hObject, handles);
@@ -133,6 +130,7 @@ if ~exist_file_(vidFname)
 end
 handles.vidFname = vidFname;
 buttons_off_(handles);
+clear_cache_();
 
 % Set result field
 vcFile_out = subsFileExt_(vidFname, '_Track.mat');
@@ -158,7 +156,7 @@ end
 
 try      
     set(handles.edit1, 'String', handles.vidFname);
-    h = msgbox('Loading... (this will close automatically)');
+    h = msgbox('Loading... (this will close automatically)', 'modal');
 %     handles.vidobj = VideoReader(handles.vidFname);
     handles.vidobj = vistrack('VideoReader', vidFname);
     fprintf('Video file info: %s\n', handles.vidFname);
@@ -535,35 +533,11 @@ SE = strel('disk', BW_SMOOTH,0); %use disk size 3 for 640 480
 [WINPOS, ~] = getBoundingBoxPos(handles.xy_init, size(img0), winlen*[1 1]);
 img = handles.img1(WINPOS(3):WINPOS(4), WINPOS(1):WINPOS(2), :);
 img0c = img0(WINPOS(3):WINPOS(4), WINPOS(1):WINPOS(2), :);
-% img00c = handles.img00(WINPOS(3):WINPOS(4), WINPOS(1):WINPOS(2));
-
-% dimg = uint8(img0c - img);
 dimg = uint8_diff(img0c, img, 0);
-% dimg = uint8(mean(single(img0c) - single(img),3));
-% dimg = uint8(sum(img0c - img, 3));
-% dimg = uint8(mean(single(img) - single(img0c), 3)/3);
-% dimg = uint8(abs(mean(single(img0c) - single(img), 3)/3));
-
-% absimg = imabsdiff(handles.img00, handles.img1);
-% absimg(~handles.MASK) = 0;
-% absimg = absimg(WINPOS(3):WINPOS(4), WINPOS(1):WINPOS(2));
-% figure; subplot 121; imagesc(absimg); title('absdiff');
-% subplot 122; imagesc(dimg); title('diff');
-% return;
-
 BW = imdilate(bwmorph((dimg > IM_THRESH), 'clean', inf), SE);
 BW = imfill(BW, 'holes');
 BW = imclearborder(BW);
 
-% dimg1 = dimg;
-% dimg1(bwperim(BW)) = 256;
-% imgabs = im(handles.img00, handles.img1);
-% imgabs(~handles.MASK) = 0;
-% figure; imagesc(imgabs);
-% figure; imagesc(dimg1);
-% return;
-
-% [BW, AreaTarget] = bwgetlargestblob(BW);
 regions = regionprops(BW, {'Area', 'Centroid', 'Orientation', 'FilledImage', 'BoundingBox'});
 if numel(regions)>1
     L = bwlabel(BW, 8);
@@ -610,7 +584,7 @@ img4 = img; img4(BW1)=255;
 imagesc(img4, INTENSITY_LIM);  
 axis equal; axis tight;
 set(gca, {'XTick', 'YTick'}, {[],[]});
-title('4. Superimposed');
+title_('4. Superimposed (if incorrect, lower "IM_THRESH")');
 colormap gray;
 
 
@@ -861,7 +835,7 @@ nframes = size(XC,1);
 %colorbar
 plotColorbar(size(handles.img0), vrRateSrt, vrQuantSrt);
 EODR1 = EODR(TEOD > TLIM(1) & TEOD < TLIM(2));
-RLIM = [quantile(EODR1, .001), quantile(EODR1, .999)];
+RLIM = [quantile_(EODR1, .001), quantile_(EODR1, .999)];
 htext = [];
 vhChevron = [];
 for iframe=1:nframes
@@ -1156,7 +1130,7 @@ mrYC = bsxfun(@minus, handles.YC, handles.YC_off);
 %setup fig
 timer1 = timer('Period', 1/15, 'ExecutionMode', 'fixedRate', 'TasksToExecute', inf);
 hFig = figure('NumberTitle', 'off', 'Name', ...
-    '[H]elp; [L/R/U/D]; SPACEBAR:Pause; [F]lip; [C]ut upto here');
+    '[H]elp; (Sft)+[L/R/U/D]; SPACEBAR:Pause; [F]lip; [C]ut upto here; [G]oto Frame');
 hImg = imshow(imadjust(MOV(:,:,1))); hold on;
 iFrame = 1;
 XC = mrXC(iFrame,:);
@@ -1292,7 +1266,7 @@ function btnUpdate_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 vistrack('update');
-msgbox('Update successful, please restart');
+msgbox('Update successful, Restart the app');
 
 
 %--------------------------------------------------------------------------
@@ -1396,11 +1370,12 @@ catch
 end
 
 
-% --- Executes on button press in pushbutton65.
-function pushbutton65_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton65 (see GCBO)
+% --- Executes on button press in btnBarPlots.
+function btnBarPlots_Callback(hObject, eventdata, handles)
+% hObject    handle to btnBarPlots (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+vistrack('trialset-barplots', get_str_(handles.editTrialSet));
 
 
 % --- Executes on button press in pushbutton66.
@@ -1439,7 +1414,13 @@ function pushbutton70_Callback(hObject, eventdata, handles)
 
 
 function [FLIM, TC, img1, img00] = mov_flim_(vidobj, nFrames_load)
+% mov_flim_(): clear cache
+
+persistent csAns1 csAns2 csAns3 mov1
+if nargin==0, [csAns1, csAns2, csAns3] = deal([]); return; end %clear cache
+
 if nargin<2, nFrames_load = 300; end % skip every 10 frames
+
 % if isempty(nFrames_skip), nFrames_skip = 75; end
 warning off;
 nFrames = vidobj.NumberOfFrames;
@@ -1448,38 +1429,48 @@ TC = linspace(0, vidobj.Duration, nFrames);
 % viF = 1:nFrames_skip:nFrames;
 viF = unique(round(linspace(1, nFrames, nFrames_load)));
 % viF = 1:nFrames_load; % much faster to load
-tmr = read_(vidobj, viF);    
+if isempty(mov1)
+    mov1 = mov_shrink_(read_(vidobj, viF), 2); 
+end
 
 % rough scan
-implay(tmr);
+implay(mov1);
 uiwait(msgbox('Find the first and last frame to track, and close the movie'));
-csAns = inputdlg({'First frame', 'Last frame'}, 'Get frames', 1, ...
-    {'1', sprintf('%d', numel(viF))});
+if isempty(csAns1), csAns1 = {'1', sprintf('%d', numel(viF))}; end
+csAns = inputdlg({'First frame', 'Last frame'}, 'Get frames', 1, csAns1);
+csAns1 = csAns;
 frame_first = viF(str2num(csAns{1}));
 frame_last = viF(str2num(csAns{2}));
+fprintf('#1: First frame: %s; Last frame: %s\n', csAns{1}, csAns{2});
 
 % Find first frame to track
 viF_first = trim_(frame_first + (-150:149), 1, nFrames);
 tmr = read_(vidobj, viF_first);
-implay(tmr);
+implay(mov_shrink_(tmr, 2));
 uiwait(msgbox('Find the first frame to track and background, and close the movie'));
-csAns = inputdlg({'First frame', 'Background frame'}, 'Get frames', 1, ...
-    {'1', num2str(numel(viF_first))});
+if isempty(csAns2), csAns2 = {'1', num2str(numel(viF_first))}; end
+csAns = inputdlg({'First frame', 'Background frame'}, 'Get frames', 1, csAns2);
+csAns2 = csAns;
 img1 = tmr(:,:,str2num(csAns{1}));
 img00 = tmr(:,:,str2num(csAns{2}));
 frame_first = viF_first(str2num(csAns{1}));
+fprintf('#2: First frame: %s; Background frame: %s\n', csAns{1}, csAns{2});
 
 % Find last frame to track
 viF_last = trim_(frame_last + (-150:149), 1, nFrames);
 tmr = read_(vidobj, viF_last);
-implay(tmr);
+implay(mov_shrink_(tmr, 2));
 uiwait(msgbox('Find the last frame to track, and close the movie'));
-csAns = inputdlg({'Last frame'}, 'Get frames', 1, ...
-    {'1'});
+iFrame3 = ceil(numel(viF_last)/2);
+if isempty(csAns3), csAns3 = {num2str(iFrame3)}; end
+csAns = inputdlg({'Last frame'}, 'Get frames', 1, csAns3);
+csAns3 = csAns;
 frame_last = viF_last(str2num(csAns{1}));
+fprintf('#3: Last frame: %s\n', csAns{1});
 
 FLIM = [frame_first, frame_last];
 TC = TC(frame_first:frame_last);
+
 
 function close_(h)
 try close(h); catch; end
@@ -1572,3 +1563,52 @@ for iField = 1:numel(csNames)
         P.(vcName_) = [];
     end
 end
+
+
+%--------------------------------------------------------------------------
+% 7/24/2018 JJJ: Copied from jrc3.m 
+function flag = exist_dir_(vcDir)
+if isempty(vcDir)
+    flag = 0;
+else
+    flag = exist(vcDir, 'dir') == 7;
+end
+
+
+%--------------------------------------------------------------------------
+% 7/24/2018: Copied from jrc3.m
+function flag = key_modifier_(event, vcKey)
+% Check for shift, alt, ctrl press
+try
+    flag = any(strcmpi(event.Modifier, vcKey));
+catch
+    flag = 0;
+end
+
+
+%--------------------------------------------------------------------------
+% 7/24/2018: Copied from jrc3.m
+function out = ifeq_(if_, true_, false_)
+if (if_)
+    out = true_;
+else
+    out = false_;
+end
+
+
+%--------------------------------------------------------------------------
+% 7/24/2018 JJJ: Clear persistent memories
+function clear_cache_()
+mov_flim_(); % clear cache;
+
+
+%--------------------------------------------------------------------------
+% 7/24/2018 JJJ: resize movie by a scale factor
+function mov = mov_shrink_(mov, nSkip)
+if nSkip==1, return; end
+mov = mov(1:nSkip:end, 1:nSkip:end, :);
+
+
+%--------------------------------------------------------------------------
+function hTItle = title_(vc)
+hTItle = title(vc, 'Interpreter', 'none');

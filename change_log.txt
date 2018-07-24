@@ -1,6 +1,19 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.1.8, 7/24/2018]
+GUI "Replay" window:
+  Added "[G]oto frame" keyboard shortcut.
+  Added fast frame jump by pressing "Shift" + Left/Right keys.
+Debugged "vistrack update" command.
+Uploaded sample files (R12A2*).
+Removed dependencies for "Statistics and Machine Learning" toolbox.
+  Only "Image processing toolbox" is required. 
+  "Parallel processing toolbox" is optional for faster processing.
+GUI "Initialize" button caches previous answers and a movie clip.
+New command added: "vistrack download-sample"
+  Download a sample video file that is too large to host from Github.com
+
 [v0.1.7, 7/23/2018]
 Added "Summary" button in GUI
 Added "Export" button in GUI

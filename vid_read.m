@@ -2,7 +2,7 @@
 function tmr = vid_read(vidobj, viF)
 nThreads = 4; % number of parallel threads to run for loading video
 
-fprintf('Loading video\n\t'); t1=tic;
+fprintf('Loading video\n'); t1=tic;
 tmr = zeros(vidobj.Height, vidobj.Width, numel(viF), 'uint8');
 
 % parfor loading
@@ -14,12 +14,12 @@ else
     fParfor = license('test', 'Distrib_Computing_Toolbox');
 end
 if fParfor
-    fprintf('using parfor\n\t');
+    fprintf('\tusing parfor\n');
     try
         parfor (iF1=1:numel(viF), nThreads)
             img = read(vidobj, viF(iF1));
             tmr(:,:,iF1) = img(:,:,1);
-            fprintf('.');
+%             fprintf('.');
         end
     catch
         fprintf('parfor failed, retrying using for loop\n\t');        
@@ -27,11 +27,18 @@ if fParfor
     end %try
 end
 if ~fParfor
-    for iF1=1:numel(viF)
-        img = read(vidobj, viF(iF1));
-        tmr(:,:,iF1) = img(:,:,1);
-        fprintf('.');
+    if all(diff(viF)==1)
+        tmr = read(vidobj, viF([1,end]));
+        tmr = squeeze(tmr(:,:,1,:));        
+    else
+        fprintf('\t');
+        for iF1=1:numel(viF)
+            img = read(vidobj, viF(iF1));
+            tmr(:,:,iF1) = img(:,:,1);
+            fprintf('.');
+        end
+        fprintf('\n');
     end
 end
-fprintf('\n\ttook %0.1fs\n', toc(t1));
+fprintf('\ttook %0.1fs\n', toc(t1));
 end %func

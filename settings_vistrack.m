@@ -12,7 +12,7 @@ ADC_CH_ESAC = 401; %ESAC chan
 % xyLED = [1554, 563]; % deprecated since v0.1.3
 
 %# Image processing parameters
-IM_THRESH = 40; % Initial threshold
+IM_THRESH = 20; % Initial threshold
 winlen = 128*2.5; %Tracking window length in pixels
 IM_MINCONTRAST = .02; %Minimum contrast difference threshold
 ThreshLim = [0 30]; % Minimum and maximum adaptive intensity threshold

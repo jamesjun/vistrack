@@ -7,8 +7,10 @@ if nargin>=4, vcArg3 = varargin{4}; else vcArg3 = ''; end
 if nargin>=5, vcArg4 = varargin{5}; else vcArg4 = ''; end
 if nargin>=6, vcArg5 = varargin{6}; else vcArg5 = ''; end
 
+
 % Command interpreter
 fReturn = 1;
+
 switch lower(vcCmd)
     case 'commit',  commit_(); 
     case 'help', help_(vcArg1); 
@@ -28,9 +30,12 @@ switch lower(vcCmd)
     case 'summary', varargout{1} = summary_(vcArg1);
     case 'export', export_(vcArg1);
     case 'videoreader', varargout{1} = VideoReader_(vcArg1);
+    case 'dependencies', disp_dependencies_();
+    case 'downloda-sample', download_sample_();
         
     case 'trialset-list', trialset_list_(vcArg1);    
     case 'trialset-learningcurve', trialset_learningcurve_(vcArg1);
+    case 'trialset-barplots', trialset_barplots_(vcArg1);
         
     otherwise, help_();
 end %switch
@@ -104,19 +109,24 @@ end %func
 
         
 %--------------------------------------------------------------------------
-function commit_(vcDir_target)
-if nargin<1, vcDir_target = 'D:\Dropbox\Git\vistrack\'; end
+function commit_(vcDir_commit)
+if nargin<1
+    S_cfg = file2struct('default.cfg');    
+    vcDir_commit = get_set_(S_cfg, 'vcDir_commit', 'D:\Dropbox\Git\vistrack\'); 
+end
+csFiles_commit = get_set_(S_cfg, 'csFiles_commit', {'*.m', 'GUI.fig', 'change_log.txt', 'readme.txt', 'example.trialset', 'default.cfg'});
+
+if exist_dir_('.git'), fprintf(2, 'Cannot commit from git repository\n'); return; end
 
 % Delete previous files
 S_warning = warning();
 warning('off');
 delete_empty_files_();
-delete([vcDir_target, '*']);
+delete([vcDir_commit, '*']);
 warning(S_warning);
 
 % Copy files
-csFiles_upload = {'*.m', 'GUI.fig', 'change_log.txt', 'readme.txt', 'example.trialset'};
-copyfile_(csFiles_upload, vcDir_target, '.');
+copyfile_(csFiles_commit, vcDir_commit, '.');
 
 edit_('change_log.txt');
 end %func
@@ -160,8 +170,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.1.7';
-vcDate = '7/23/2018';
+vcVer = 'v0.1.8';
+vcDate = '7/24/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
 end
@@ -204,6 +214,8 @@ csHelp = {...
     '# Deployment';
     '  vistrack update';
     '    Update from Github'; 
+    '  vistrack download-sample';
+    '    Download a sample video from Dropbox';
     '  vistrack update version';
     '    Download specific version from Github'; 
     '  vistrack commit';
@@ -430,6 +442,7 @@ try
 catch
 	code = -1;
 end
+
 if code ~= 0
     fprintf(2, 'Not a git repository. Please run the following command to clone from GitHub.\n');    
     fprintf(2, '\tRun system(''git clone %s.git''\n', repoURL);
@@ -684,7 +697,7 @@ end %func
 
 %--------------------------------------------------------------------------
 function delete_(varargin)
-for i=1:narging
+for i=1:nargin()
     try
         delete(varargin{i});
     catch
@@ -796,7 +809,7 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function trialset_learningcurve_(vcFile_trialset)
+function [mrPath, mrDur, S_trialset] = trialset_learningcurve_(vcFile_trialset)
 
 % iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
 % run S141106_LearningCurve_Control.m first cell
@@ -841,25 +854,27 @@ end
 viCol = find(~any(isnan(mrPath)));
 [mrPath, mrDur] = deal(mrPath(:,viCol), mrDur(:,viCol));
 
-figure; set(gcf,'Name',vcFile_trialset,'Color','w');
-subplot 211; errorbar_iqr_(mrPath); ylabel('Dist (m)'); grid on; xlabel('Session #');
-subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');
+if nargout==0
+    figure; set(gcf,'Name',vcFile_trialset,'Color','w');
+    subplot 211; errorbar_iqr_(mrPath); ylabel('Dist (m)'); grid on; xlabel('Session #');
+    subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');
+end
 end %func
 
 
 %--------------------------------------------------------------------------
 function mr_ = errorbar_iqr_(mr)
-mr_ = quantile_(mr, [.25,.5,.75]);
+mr_ = quantile_mr_(mr, [.25,.5,.75]);
 errorbar(1:size(mr_,1), mr_(:,2), mr_(:,2)-mr_(:,1), mr_(:,3)-mr_(:,2));
 set(gca, 'XLim', [.5, size(mr_,1)+.5]);
 end %func
 
 
 %--------------------------------------------------------------------------
-function mr1 = quantile_(mr, vrQ)
+function mr1 = quantile_mr_(mr, vrQ)
 mr1 = zeros(numel(vrQ), size(mr,2), 'like', mr);
 for i=1:size(mr,2)
-    mr1(:,i) = quantile(mr(:,i), vrQ);
+    mr1(:,i) = quantile_(mr(:,i), vrQ);
 end
 mr1 = mr1';
 end %func
@@ -918,7 +933,10 @@ end %func
 %--------------------------------------------------------------------------
 % 7/20/2018 JJJ: list trialset files
 function trialset_list_(vcFile_trialset)
-
+if ~exist_dir_(vcFile_trialset)
+    errordlg(sprintf('vcDir=''%s''; does not exist', vcFile_trialset), vcFile_trialset); 
+    return;
+end
 S_trialset = load_trialset_(vcFile_trialset);
 [tiImg, vcType_uniq, vcAnimal_uniq, csDir_trial, csFiles_Track] = ...
     struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'csDir_trial', 'csFiles_Track');
@@ -1118,17 +1136,142 @@ end %func
 function vidobj = VideoReader_(vcFile_vid, nRetry)
 if nargin<2, nRetry = []; end
 if isempty(nRetry), nRetry = 3; end % number of frames can change
+nThreads = 1; % disable parfor by setting it to 1. Parfor is slower
 
 fprintf('Loading Video: %s\n', vcFile_vid); t1=tic;
 cVidObj = cell(nRetry,1);
-for iRetry = 1:nRetry
-    vidobj = VideoReader(vcFile_vid);
-    vnFrames(iRetry) = vidobj.NumberOfFrames;
-    cVidObj{iRetry} = vidobj;
-    fprintf('\t#%d: %d frames\n', iRetry, vnFrames(iRetry));
-end %for
+fParfor = is_parfor_(nThreads);
+if fParfor
+    try
+        parfor iRetry = 1:nRetry
+            [cVidObj{iRetry}, vnFrames(iRetry)] = load_vid_(vcFile_vid);
+            fprintf('\t#%d: %d frames\n', iRetry, vnFrames(iRetry));
+        end %for
+    catch
+        fParfor = 0;
+    end
+end
+if ~fParfor
+    for iRetry = 1:nRetry
+        [cVidObj{iRetry}, vnFrames(iRetry)] = load_vid_(vcFile_vid);
+        fprintf('\t#%d: %d frames\n', iRetry, vnFrames(iRetry));
+    end %for
+end
 [NumberOfFrames, iMax] = max(vnFrames);
 vidobj = cVidObj{iMax};
 
 fprintf('\ttook %0.1fs\n', toc(t1));
+end %func
+
+
+%--------------------------------------------------------------------------
+function [vidobj, nFrames] = load_vid_(vcFile_vid);
+try
+    vidobj = VideoReader(vcFile_vid);
+    nFrames = vidobj.NumberOfFrames;
+catch
+    vidobj = [];
+    nFrames = 0;    
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function fParfor = is_parfor_(nThreads)
+if nargin<1, nThreads = []; end
+
+if nThreads == 1
+    fParfor = 0;
+else
+    fParfor = license('test', 'Distrib_Computing_Toolbox');
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+% 11/5/17 JJJ: Created
+function vc = dir_filesep_(vc)
+% replace the file seperaation characters
+if isempty(vc), return; end
+vl = vc == '\' | vc == '/';
+if any(vl), vc(vl) = filesep(); end
+end %func
+
+
+%--------------------------------------------------------------------------
+function trialset_barplots_(vcFile_trialset)
+% iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
+% run S141106_LearningCurve_Control.m first cell
+
+[mrPath, mrDur, S_trialset] = trialset_learningcurve_(vcFile_trialset);
+
+figure; 
+subplot 131;
+subplot 132;
+subplot 133;
+end %func
+
+
+%--------------------------------------------------------------------------
+% Display list of toolbox and files needed
+% 7/26/17 JJJ: Code cleanup and test
+function [fList, pList] = disp_dependencies_(vcFile)
+if nargin<1, vcFile = []; end
+if isempty(vcFile), vcFile = mfilename(); end
+
+[fList,pList] = matlab.codetools.requiredFilesAndProducts(vcFile);
+if nargout==0
+    disp('Required toolbox:');
+    disp({pList.Name}');
+    disp('Required files:');
+    disp(fList');
+end
+end % func
+
+
+%--------------------------------------------------------------------------
+function download_sample_()
+S_cfg = file2struct('default.cfg');
+csLink = get_(S_cfg, 'csLink_sample');
+if isempty(csLink), fprintf(2, 'Sample video does not exist\n'); return; end
+
+t1 = tic;
+fprintf('Downloading sample files. This can take up to several minutes.\n');
+vlSuccess = download_files_(csLink);
+fprintf('\t%d/%d files downloaded. Took %0.1fs\n', ...
+    sum(vlSuccess), numel(vlSuccess), toc(t1));
+end %func
+
+
+%--------------------------------------------------------------------------
+function vlSuccess = download_files_(csLink, csDest)
+% download file from the web
+if nargin<2, csDest = link2file_(csLink); end
+vlSuccess = false(size(csLink));
+for iFile=1:numel(csLink)    
+    try
+        % download from list of files    
+        fprintf('\tDownloading %s: ', csLink{iFile});
+        vcFile_out1 = websave(csDest{iFile}, csLink{iFile});
+        fprintf('saved to %s\n', vcFile_out1);
+        vlSuccess(iFile) = 1;
+    catch
+        fprintf(2, '\n\tCannot download. Check internet connection.\n');
+    end
+end %for
+end %func
+
+
+%--------------------------------------------------------------------------
+function csFile = link2file_(csLink)
+csFile = cell(size(csLink));
+for i=1:numel(csLink)        
+    vcFile1 = csLink{i};
+    iBegin = find(vcFile1=='/', 1, 'last'); % strip ?    
+    if ~isempty(iBegin), vcFile1 = vcFile1(iBegin+1:end); end
+
+    iEnd = find(vcFile1=='?', 1, 'last'); % strip ?
+    if ~isempty(iEnd), vcFile1 = vcFile1(1:iEnd-1); end
+    csFile{i} = vcFile1;
+end
 end %func

@@ -26,8 +26,9 @@ switch mode
 end
 
 h=msgbox('Loading... (this will close automatically)', 'detect LED blink'); drawnow;    
-trImg = read(handles.vidobj, FLIM1);
-trImg = squeeze(trImg(:,:,1,:));
+% trImg = read(handles.vidobj, FLIM1);
+% trImg = squeeze(trImg(:,:,1,:));
+trImg = vid_read(handles.vidobj, FLIM1(1):FLIM1(2));
 try close(h); catch, end;
 
 if isempty(xyLED), xyLED = find_mov_max_(trImg); end

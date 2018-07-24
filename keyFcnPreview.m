@@ -13,24 +13,38 @@ nFrames = size(handles.MOV,3);
 [iFrame, hObject] = deal(S.iFrame, S.hObject);
 switch lower(event.Key)
     case 'h' %help
-        csHelp = {'SPACE: start and stop', 'LEFT/RIGHT: backward/forward', ...
-            'HOME/END: start/end', 'F: Flip head/tail', ...
-            'UP/DOWN: Speed up/down', 'C: Trim video'};
+        csHelp = { ...
+            '----Playback----', 
+            '[SPACE]: start and stop video', 
+            '(Shift) + LEFT/RIGHT: backward/forward (Shift: 4x)', 
+            '[UP/DOWN]: Speed up/down', 
+            '[HOME/END]: Go to start/end',
+            '[G]oto: Go to a specific frame}', 
+            '----EDIT----',
+            '[F]lip head/tail', 
+            '[C]ut: Trim video up to the current frame'};
         msgbox(csHelp);
         
     case 'space'  % toggle start and stop  
         if fRunning, stop(timer1);
         else start(timer1); end
     
-    case {'leftarrow', 'rightarrow', 'f', 'home', 'end'}
+    case {'leftarrow', 'rightarrow', 'f', 'home', 'end', 'g'}
     %'f' for flip, 'left' for back, 'right' for forward
         if fRunning, stop(timer1); end
         switch event.Key
-            case 'leftarrow', S.iFrame = max(1, S.iFrame-S.REPLAY_STEP);
-            case 'rightarrow', S.iFrame = min(nFrames, S.iFrame+S.REPLAY_STEP);
+            case {'leftarrow', 'rightarrow'}
+                nStep = S.REPLAY_STEP * ifeq_(key_modifier_(event, 'shift'), 4, 1);
+                nStep = nStep * ifeq_(strcmpi(event.Key, 'leftarrow'), -1, 1);
+                S.iFrame = min(max(1, S.iFrame + nStep), nFrames);
             case 'home', S.iFrame = 1;
             case 'end', S.iFrame = nFrames;
             case 'f', GUI_FLIP; %flip orientation
+            case 'g' % go to frame
+                S.iFrame = uigetnum(sprintf('Go to Frame (choose from 1-%d)', nFrames), S.iFrame);
+                if isempty(S.iFrame), return; end
+                if (S.iFrame < 1 || S.iFrame > nFrames), S.iFrame = nan; end
+                if isnan(S.iFrame), msgbox('Cancelled'); return; end
         end  
         set(S.hImg, 'CData', imadjust(handles.MOV(:,:,S.iFrame)));
         
@@ -50,6 +64,7 @@ switch lower(event.Key)
                 
     case 'uparrow' %speed up
         S.REPLAY_STEP = min(S.REPLAY_STEP+1, 30);
+        
     
     case 'downarrow' %speed up
         S.REPLAY_STEP = max(S.REPLAY_STEP-1, 1);  
@@ -65,3 +80,27 @@ set(S.hTitle, 'String', ...
     S.iFrame, S.TC1(S.iFrame), S.REPLAY_STEP, vcDataID));
 
 set(timer1, 'UserData', S);
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/24/2018: Copied from jrc3.m
+function flag = key_modifier_(event, vcKey)
+% Check for shift, alt, ctrl press
+try
+    flag = any(strcmpi(event.Modifier, vcKey));
+catch
+    flag = 0;
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/24/2018: Copied from jrc3.m
+function out = ifeq_(if_, true_, false_)
+if (if_)
+    out = true_;
+else
+    out = false_;
+end
+end %func
