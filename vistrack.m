@@ -170,10 +170,11 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.1.9';
+vcVer = 'v0.2.1';
 vcDate = '7/24/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
+    edit_('change_log.txt');
 end
 end %func
 
@@ -1246,17 +1247,25 @@ end %func
 %--------------------------------------------------------------------------
 function vlSuccess = download_files_(csLink, csDest)
 % download file from the web
+nRetry = 5;
+
 if nargin<2, csDest = link2file_(csLink); end
 vlSuccess = false(size(csLink));
 for iFile=1:numel(csLink)    
-    try
-        % download from list of files    
-        fprintf('\tDownloading %s: ', csLink{iFile});
-        vcFile_out1 = websave(csDest{iFile}, csLink{iFile});
-        fprintf('saved to %s\n', vcFile_out1);
-        vlSuccess(iFile) = 1;
-    catch
-        fprintf(2, '\n\tCannot download. Check internet connection.\n');
+    for iRetry = 1:nRetry
+        try
+            % download from list of files    
+            fprintf('\tDownloading %s: ', csLink{iFile});
+            vcFile_out1 = websave(csDest{iFile}, csLink{iFile});
+            fprintf('saved to %s\n', vcFile_out1);
+            vlSuccess(iFile) = 1;
+            break;
+        catch
+            fprintf('\tRetrying %d/%d\n', iRetry, nRetry);
+            if iRetry==nRetry
+                fprintf(2, '\n\tDownload failed. Check internet connection.\n');
+            end
+        end
     end
 end %for
 end %func

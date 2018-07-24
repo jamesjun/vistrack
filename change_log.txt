@@ -1,6 +1,13 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.2.1, 7/24/2018]
+.gitignore file added, ignoring *.wmv files
+
+[v0.2.0, 7/24/2018]
+Debugged "visrack download-sample" command
+  Retrying up to 5 times
+
 [v0.1.9, 7/24/2018]
 Debugged "visrack download-sample" command
 
