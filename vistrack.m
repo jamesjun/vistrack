@@ -109,24 +109,19 @@ end %func
 
         
 %--------------------------------------------------------------------------
-function commit_(vcDir_commit)
-if nargin<1
-    S_cfg = file2struct('default.cfg');    
-    vcDir_commit = get_set_(S_cfg, 'vcDir_commit', 'D:\Dropbox\Git\vistrack\'); 
-end
-csFiles_commit = get_set_(S_cfg, 'csFiles_commit', {'*.m', 'GUI.fig', 'change_log.txt', 'readme.txt', 'example.trialset', 'default.cfg'});
-
+function commit_()
+S_cfg = load_cfg_();
 if exist_dir_('.git'), fprintf(2, 'Cannot commit from git repository\n'); return; end
 
 % Delete previous files
 S_warning = warning();
 warning('off');
 delete_empty_files_();
-delete([vcDir_commit, '*']);
+delete([S_cfg.vcDir_commit, '*']);
 warning(S_warning);
 
 % Copy files
-copyfile_(csFiles_commit, vcDir_commit, '.');
+copyfile_(S_cfg.csFiles_commit, S_cfg.vcDir_commit, '.');
 
 edit_('change_log.txt');
 end %func
@@ -170,8 +165,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.2.1';
-vcDate = '7/24/2018';
+vcVer = 'v0.2.2';
+vcDate = '7/25/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -431,8 +426,9 @@ if ~exist_dir_('.git')
     return; 
 end
 if nargin<1, vcVersion = ''; end
-delete_('settings_vistrack.m');
-delete_('example.trialset');
+S_cfg = load_cfg_();
+% delete_file_(get_(S_cfg, 'csFiles_delete'));
+
 repoURL = 'https://github.com/jamesjun/vistrack';
 try
     if isempty(vcVersion)
@@ -775,7 +771,7 @@ function P = load_settings_(handles)
 % P = load_settings_()
 % P = load_settings_(handles)
 
-P = file2struct('default.cfg');
+P = load_cfg_();
 P.vcFile_settings = get_set_(P, 'vcFile_settings', 'settings_vistrack.m');
 P.pixpercm = get_set_(P, 'pixpercm', 7.238);
 P.angXaxis = get_set_(P, 'angXaxis', -0.946);
@@ -1232,7 +1228,7 @@ end % func
 
 %--------------------------------------------------------------------------
 function download_sample_()
-S_cfg = file2struct('default.cfg');
+S_cfg = load_cfg_();
 csLink = get_(S_cfg, 'csLink_sample');
 if isempty(csLink), fprintf(2, 'Sample video does not exist\n'); return; end
 
@@ -1284,3 +1280,37 @@ for i=1:numel(csLink)
     csFile{i} = vcFile1;
 end
 end %func
+
+
+%--------------------------------------------------------------------------
+% 7/25/2018 JJJ: Wait for file to get deleted
+function delete_file_(csFiles)
+if isempty(csFiles), return; end
+if ischar(csFiles), csFiles = {csFiles}; end
+nRetry = 5;
+
+for iRetry = 1:nRetry
+    for iFile = 1:numel(csFiles)
+        if ~exist_file_(csFiles{iFile}), continue; end
+        delete_(csFiles{iFile});
+    end
+end
+for i=1:nRetry, pause(.2); end % wait for file deletion
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/25/2018 JJJ: Wait for file to get deleted
+function S_cfg = load_cfg_()
+try
+    S_cfg = file2struct('default.cfg');    
+catch
+    S_cfg = struct(); % return an empty struct
+end
+
+% default field
+S_cfg.vcDir_commit = get_set_(S_cfg, 'vcDir_commit', 'D:\Dropbox\Git\vistrack\'); 
+S_cfg.csFiles_commit = get_set_(S_cfg, 'csFiles_commit', {'*.m', 'GUI.fig', 'change_log.txt', 'readme.txt', 'example.trialset', 'default.cfg'});
+S_cfg.csFiles_delete = get_set_(S_cfg, 'csFiles_delete', {'settings_vistrack.m', 'example.trialset', 'R12A2_Track.mat'});
+end %func
+

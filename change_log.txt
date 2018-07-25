@@ -1,6 +1,9 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.2.2, 7/24/2018]
+Debug: fixes missing settings_vistrack.m flie after software update.
+
 [v0.2.1, 7/24/2018]
 .gitignore file added, ignoring *.wmv files
 
