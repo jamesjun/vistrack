@@ -26,7 +26,7 @@ TIMECNT = zeros(size(I0)); %1 means 1msec stay
 
 %count time spent
 VISITCNT = zeros(size(I0)); %1 means 1msec stay
-HISTORY = zeros(size(I0));
+HISTORY = zeros(size(I0), 'uint8');
 for i=1:step:numel(Xi)        
     % Get nearby indices
     X = XX + round(Xi(i));      Y = YY + round(Yi(i));
@@ -35,10 +35,12 @@ for i=1:step:numel(Xi)
     
     TIMECNT(Y,X) = TIMECNT(Y,X) + step;
         
-    idx = sub2ind(size(I0), Y, X);       
+    idx = sub2ind(size(I0), Y, X);    
+    idx2 = idx(HISTORY(idx) == 0); % keep non visited index
+    
     % only update
-    [idx1] = find(HISTORY>0);    
-    idx2 = setdiff(idx, idx1);    %exclude recently updated values  
+%     [idx1] = find(HISTORY>0);    
+%     idx2 = setdiff(idx, idx1);    %exclude recently updated values  
     if ~isempty(idx2)
         VISITCNT(idx2) = VISITCNT(idx2) + 1;
     end    

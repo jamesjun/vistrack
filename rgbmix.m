@@ -1,11 +1,19 @@
-function RGB = rgbmix(RGBbk, RGB, MASK, mode)
 %   mix the RGB to RGBbk in the masked area
-mixRatio = .25;
+function RGB = rgbmix(RGBbk, RGB, MASK, mode, mixRatio)
+% RGB = rgbmix(RGBbk, RGB, MASK, 'mix', mixRatio)
+% RGB = rgbmix(RGBbk, RGB, [], 'transparent', mixRatio)
 
-if nargin <3
-    mode = 'transparent';
-elseif nargin < 4
-    mode = 'mix';
+if nargin<3, MASK = []; end
+if nargin<4, mode = ''; end
+if nargin<5, mixRatio = []; end
+
+if isempty(mixRatio), mixRatio = .25; end
+if isempty(mode)
+    if ~isempty(MASK)
+        mode = 'mix';
+    else
+        mode = 'transparent';
+    end
 end
 
 if numel(size(RGBbk)) == 2 %gray scale
@@ -15,7 +23,7 @@ if numel(size(RGBbk)) == 2 %gray scale
     RGBbk = imgray2rgb(RGBbk, [0 255], 'Gray');
 end
 if numel(size(RGB)) == 2 %gray scale
-    if nargin >= 3
+    if ~isempty(MASK)
         RGB(~MASK) = 0;
     end
     if isa(RGB, 'double')
@@ -33,10 +41,11 @@ switch mode
         Rmix = uint8((RGB(:,:,1)*mixRatio + R*(1-mixRatio)));
         Gmix = uint8((RGB(:,:,2)*mixRatio + G*(1-mixRatio)));
         Bmix = uint8((RGB(:,:,3)*mixRatio + B*(1-mixRatio)));
-
-        R(MASK) = Rmix(MASK);
-        G(MASK) = Gmix(MASK);
-        B(MASK) = Bmix(MASK);
+        if ~isempty(MASK)
+            R(MASK) = Rmix(MASK);
+            G(MASK) = Gmix(MASK);
+            B(MASK) = Bmix(MASK);
+        end
     case 'transparent'
         %mask is not used, instead RGBbk and RGB are simply added 50/50
         R = uint8((RGB(:,:,1)*mixRatio + R*(1-mixRatio)));

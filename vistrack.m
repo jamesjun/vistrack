@@ -165,7 +165,7 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.2.2';
+vcVer = 'v0.2.3';
 vcDate = '7/25/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
@@ -818,6 +818,7 @@ S_trialset = load_trialset_(vcFile_trialset);
 
 [trDur, trPath] = deal(nan(size(tiImg)));
 fprintf('Analyzing\n\t');
+warning off;
 t1 = tic;
 for iTrial = 1:numel(viImg)    
     try
@@ -930,11 +931,15 @@ end %func
 %--------------------------------------------------------------------------
 % 7/20/2018 JJJ: list trialset files
 function trialset_list_(vcFile_trialset)
-if ~exist_dir_(vcFile_trialset)
+S_trialset = load_trialset_(vcFile_trialset);
+if isempty(S_trialset)
+	errordlg(sprintf('%s does not exist', vcFile_trialset)); return; 
+end
+if ~exist_dir_(get_(S_trialset, 'vcDir'))
     errordlg(sprintf('vcDir=''%s''; does not exist', vcFile_trialset), vcFile_trialset); 
     return;
 end
-S_trialset = load_trialset_(vcFile_trialset);
+% S_trialset = load_trialset_(vcFile_trialset);
 [tiImg, vcType_uniq, vcAnimal_uniq, csDir_trial, csFiles_Track] = ...
     struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'csDir_trial', 'csFiles_Track');
 
@@ -974,12 +979,13 @@ end %func
 
 %--------------------------------------------------------------------------
 function S_trialset = load_trialset_(vcFile_trialset)
-
+% return [] if vcFile_trialset does not exist or 
+if ~exist_file_(vcFile_trialset), S_trialset = []; return; end
 S_trialset = file2struct(vcFile_trialset);
 P = load_settings_();
 [csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
-% csFiles_Track = find_files_(csDir_trial, '*_Track.mat');
-
+if isempty(csFiles_Track), return; end
+    
 [csDataID, S_trialset_]  = get_dataid_(csFiles_Track);
 S_trialset = struct_merge_(S_trialset, S_trialset_);
 [vcAnimal_uniq, vnAnimal_uniq] = unique_(S_trialset.vcAnimal);
@@ -1202,10 +1208,71 @@ function trialset_barplots_(vcFile_trialset)
 
 [mrPath, mrDur, S_trialset] = trialset_learningcurve_(vcFile_trialset);
 
+viEarly = get_(S_trialset, 'viEarly_trial');
+viLate = get_(S_trialset, 'viLate_trial');
+if isempty(viEarly) || isempty(viLate)
+    msgbox('Set "viEarly_trial" and "viLate_trial" in .trialset file');
+    return;
+end
+
+[vrPath_early, vrPath_late] = deal(mrPath(:,viEarly), mrPath(:,viLate));
+[vrDur_early, vrDur_late] = deal(mrDur(:,viEarly), mrDur(:,viLate));
+[vrSpeed_early, vrSpeed_late] = deal(vrPath_early./vrDur_early, vrPath_late./vrDur_late);
+quantLim = get_set_(S_trialset, 'quantLim', [1/8, 7/8]);
+[vrPath_early, vrPath_late, vrDur_early, vrDur_late, vrSpeed_early, vrSpeed_late] = ...
+    trim_quantile_(vrPath_early, vrPath_late, vrDur_early, vrDur_late, vrSpeed_early, vrSpeed_late, quantLim);
+
 figure; 
+set(gcf, 'Name', vcFile_trialset, 'Color', 'w');
 subplot 131;
+bar_mean_sd_({vrPath_early, vrPath_late}, {'Early', 'Late'}, 'Pathlen (m)');
+
 subplot 132;
+bar_mean_sd_({vrDur_early, vrDur_late}, {'Early', 'Late'}, 'Duration (s)');
+
 subplot 133;
+bar_mean_sd_({vrSpeed_early, vrSpeed_late}, {'Early', 'Late'}, 'Speed (m/s)');
+
+msgbox(sprintf('Early Sessions: %s\nLate Sessions: %s', sprintf('%d ', viEarly), sprintf('%d ', viLate)));
+end %func
+
+
+%--------------------------------------------------------------------------
+function varargout = bar_mean_sd_(cvr, csXLabel, vcYLabel)
+if nargin<2, csXLabel = {}; end
+if nargin<3, vcYLabel = ''; end
+if isempty(csXLabel), csXLabel = 1:numel(cvr); end
+
+vrMean = cellfun(@(x)nanmean(x(:)), cvr);
+vrSd = cellfun(@(x)nanstd(x(:)), cvr);
+vrX = 1:numel(cvr);
+
+errorbar(vrX, vrMean, [], vrSd, 'k', 'LineStyle', 'none'); 
+hold on; grid on;
+h = bar(vrX, vrMean);
+set(h, 'EdgeColor', 'None');
+set(gca, 'XTick', vrX, 'XTickLabel', csXLabel, 'XLim', vrX([1,end]) + [-.5, .5]);
+ylabel(vcYLabel);
+
+[h,pa]=ttest2(cvr{1},cvr{2});
+fprintf('%s: E vs L, p=%f\n', vcYLabel, pa);
+end %func
+
+
+%--------------------------------------------------------------------------
+function varargout = trim_quantile_(varargin)
+qlim = varargin{end};
+for iArg = 1:nargout
+    vr_ = varargin{iArg};
+    varargout{iArg} = quantFilt_(vr_(:), qlim);
+end %for
+end %func
+
+
+%--------------------------------------------------------------------------
+function vr = quantFilt_(vr, quantLim)
+qlim = quantile(vr(:), quantLim);
+vr = vr(vr >= qlim(1) & vr < qlim(end));
 end %func
 
 
@@ -1259,7 +1326,8 @@ for iFile=1:numel(csLink)
         catch
             fprintf('\tRetrying %d/%d\n', iRetry, nRetry);
             if iRetry==nRetry
-                fprintf(2, '\n\tDownload failed. Check internet connection.\n');
+                fprintf(2, '\n\tDownload failed. Please download manually from the link below.\n');
+                fprintf(2, '\t%s\n', csLink{iFile});
             end
         end
     end
@@ -1312,5 +1380,6 @@ end
 S_cfg.vcDir_commit = get_set_(S_cfg, 'vcDir_commit', 'D:\Dropbox\Git\vistrack\'); 
 S_cfg.csFiles_commit = get_set_(S_cfg, 'csFiles_commit', {'*.m', 'GUI.fig', 'change_log.txt', 'readme.txt', 'example.trialset', 'default.cfg'});
 S_cfg.csFiles_delete = get_set_(S_cfg, 'csFiles_delete', {'settings_vistrack.m', 'example.trialset', 'R12A2_Track.mat'});
+S_cfg.quantLim = get_set_(S_cfg, 'quantLim', [1/8, 7/8]);
 end %func
 

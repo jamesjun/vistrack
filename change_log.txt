@@ -1,6 +1,10 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.2.3, 7/25/2018]
+GUI "Density" button made faster and improved
+Trialset "Bar plots" button added
+
 [v0.2.2, 7/24/2018]
 Debug: fixes missing settings_vistrack.m flie after software update.
 

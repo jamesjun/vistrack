@@ -261,112 +261,6 @@ try
 catch
     return;
 end
-% elseif ~exist('TLIM', 'var')
-%     try
-%         ADCTC = load(vcFile_adc_ts);
-%         prefix = getSpike2Prefix(ADCTC);
-%         chTEXT = getfield(ADCTC, sprintf('%s_Ch%d', prefix, ADC_CH_TEXT));
-%         [EODR, TEOD, chName] = getSpike2Chan(handles.ADC, ADC_CH_EODR);
-%         AMPL = getSpike2Chan(handles.ADC, ADC_CH_AMPL);
-%         hfig = figure; AX = [];
-%         subplot 212; plot(TEOD, AMPL); AX(2) = gca; grid on;
-%         subplot 211; plot(TEOD, EODR); AX(1) = gca; grid on;        
-%         linkaxes(AX, 'x');
-%         hold on;                
-%         xlabel('Time (s)'); ylabel('EOD Rate (Hz)'); axis tight;                
-%         title({'Set time range and double-click', ...
-%                'r: GATE OPEN, m: ENTERED ARENA; g: GATE CLOSE', ...
-%                'c: FOUND FOOD; b: LIGHT BLINK; k: Default'}); 
-%         set(hfig, 'Name', handles.vidFname, 'OuterPosition', get(0, 'ScreenSize'));
-%         drawnow;
-%         TLIM = [nan, nan];
-%         for i=1:numel(chTEXT.times)            
-%             if ~isempty(strfind(chTEXT.text(i,:), 'GATE_OPEN'));                
-%                 color = '-r';
-%             elseif ~isempty(strfind(chTEXT.text(i,:), 'ENTERED_ARENA'));
-%                 color = '-m';                
-%             elseif ~isempty(strfind(chTEXT.text(i,:), 'GATE_CLOSE'));
-%                 color = '-g';
-%             elseif ~isempty(strfind(chTEXT.text(i,:), 'FOUND_FOOD'));
-%                 color = '-c';            
-%             elseif ~isempty(strfind(chTEXT.text(i,:), 'LIGHT_BLINK'));
-%                 color = '-b';
-%             else
-%                 color = '-k';
-%             end
-%             plot(chTEXT.times(i)*[1 1], get(gca, 'YLim'), color);
-%         end        
-%         gcax = get(gca, 'XLim'); 
-%         gcay = get(gca, 'YLim');
-%         h = imrect(gca, [gcax(1) gcay(1) diff(gcax) diff(gcay)]);
-%         hpos = wait(h);
-%         TLIM(1) = hpos(1);
-%         TLIM(2) = sum(hpos([1 3]));
-%         
-%         fprintf('TLIM: ');
-%         disp(TLIM(:)');
-%         try close(hfig), catch, end;
-%     catch
-%         errordlg('Specify TLIM = [First, Last]; in the Settings');
-%         disp(lasterr);
-%         handles.ADC
-%         return;
-%     end
-% end
-% 
-% % Set time range to track
-% if ~fSkipAdc
-%     FLIM1 = round(interp1(handles.TLIM0, handles.FLIM0, TLIM, 'linear', 'extrap'));
-%     FLIM1(1) = max(FLIM1(1), 1);
-%     FLIMa = lim_bound(FLIM1(1) + [-149,150], 1, FLIM1(2));
-%     FLIMb = lim_bound(FLIM1(2) + [-149,150], 1, handles.FLIM0(2));
-% 
-%     % Refine the first and last frames to track
-%     try
-%         % first frame to track
-%         h=msgbox('Loading... (this will close automatically)');
-%         trImg = read(handles.vidobj, FLIMa);
-%     %     trImg = trImg(:,:,1,:);
-%         try close(h); catch, end;    
-%         implay(trImg);       
-%         uiwait(msgbox('Find the first frame to track and background, and close the movie'));
-%         answer = inputdlg({'First frame', 'Background frame'}, 'Get frames', 1, ...
-%             {'1', sprintf('%d', diff(FLIMa)+1)});
-%         firstFrame = str2num(answer{1});
-%         img1 = trImg(:, :, :, firstFrame);
-%         FLIM(1) = firstFrame + FLIMa(1) - 1;    
-%         bgFrame = str2num(answer{2});
-%         img00 = trImg(:, :, :, bgFrame);    
-% 
-%         % last frame to track
-%         h=msgbox('Loading... (this will close automatically)');
-%         trImg = read(handles.vidobj, FLIMb);
-%     %     trImg = trImg(:,:,1,:);
-%         try close(h); catch, end;    
-%         implay(trImg);
-%         uiwait(msgbox('Find the last frame to track, and close the movie'));
-%         ans = inputdlg('Frame Number', 'Last frame', 1, {sprintf('%d', diff(FLIMb)+1)});
-%         FLIM(2) = str2num(ans{1}) + FLIMb(1) - 1;
-% 
-%         % camera time unit
-%         TC = interp1(handles.FLIM0, handles.TLIM0, FLIM(1):FLIM(2), 'linear');
-% 
-%         % Create background
-%         [img00, MASK, xy_init, vec0, xy0] = makeBackground(img1, img00);
-%     catch
-%         disp(lasterr);
-%         return;
-%     end    
-% end
-
-% Create a background 
-% ans = inputdlg({'Second image frame #'}, 'Background', 1, {sprintf('%0.0f', FLIM(2))});
-% Frame2 = str2double(ans{1});
-% h=msgbox('Loading... (this will close automatically)');
-% img1 = read(handles.vidobj, Frame1); img1=img1(:,:,1);
-% img2 = read(handles.vidobj, Frame2); img2=img2(:,:,1);
-% try close(h); catch, end;
-% [img00, MASK, xy_init, vec0, xy0] = makeBackground(img1, img2);
 
 % Update handles structure
 handles.MASK = MASK;
@@ -986,13 +880,14 @@ h = msgbox('Calculating... (this will close automatically)');
 try close(h); catch, end;   
 
 [~, exprID, ~] = fileparts(handles.vidFname);
+img0_adj = imadjust(handles.img0);
 figure; 
 subplot 121; 
-imshow(rgbmix(handles.img0, imgray2rgb((TIMECNT))));   
+imshow(rgbmix(img0_adj, imgray2rgb(TIMECNT), [], 'transparent'));   
 title(['Time density map: ', exprID]);
 
 subplot 122; 
-imshow(rgbmix(handles.img0, imgray2rgb((VISITCNT))));  
+imshow(rgbmix(img0_adj, imgray2rgb(VISITCNT), [], 'transparent'));   
 title(['Visit density map: ', exprID]);    
 
 %update
@@ -1539,8 +1434,11 @@ cellfun(@(s)fprintf('%s\n',s), cs);
 function vcFile_full = fullpath_(vcFile)
 S_dir = dir(vcFile);
 if numel(S_dir)~=1, vcFile_full = vcFile; return ;end
-vcFile_full = fullfile(S_dir.folder, S_dir.name);
-
+try
+    vcFile_full = fullfile(S_dir.folder, S_dir.name);
+catch
+    vcFile_full = vcFile; % if S_dir.folder doesn't exist
+end
 
 
 %--------------------------------------------------------------------------
