@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 24-Jul-2018 11:57:00
+% Last Modified by GUIDE v2.5 26-Jul-2018 11:26:13
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -1432,13 +1432,14 @@ cellfun(@(s)fprintf('%s\n',s), cs);
 %--------------------------------------------------------------------------
 % Retreive full path of a file
 function vcFile_full = fullpath_(vcFile)
-S_dir = dir(vcFile);
-if numel(S_dir)~=1, vcFile_full = vcFile; return ;end
-try
-    vcFile_full = fullfile(S_dir.folder, S_dir.name);
-catch
-    vcFile_full = vcFile; % if S_dir.folder doesn't exist
+[vcDir_, vcFile_, vcExt_] = fileparts(vcFile);
+if isempty(vcDir_) 
+    vcDir_ = pwd();
+    vcFile_full = fullfile(vcDir_, vcFile);
+else
+    vcFile_full = vcFile;
 end
+if nargout>=2, S_dir = dir(vcFile_full); end
 
 
 %--------------------------------------------------------------------------

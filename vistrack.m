@@ -70,8 +70,9 @@ csMsg = {...
     sprintf('  version used: %s (%s)', handles.vcVer, handles.vcVer_date);
     sprintf('  -----');
     sprintf('  Video file: %s', get_(handles, 'vidFname'));   
+    sprintf('    FPS: %0.3f', get_(handles, 'FPS'));       
     sprintf('  ADC file: %s', get_(handles, 'editADCfile', 'String')); 
-    sprintf('  ADC_TS file: %s', get_(handles, 'editADCfileTs', 'String'));   
+    sprintf('  ADC_TS file: %s', get_(handles, 'editADCfileTs', 'String'));
 };
 % csMsg = [csMsg; get_(handles, 'csSettings')];
 if nargout==0, disp(csMsg); end
@@ -79,13 +80,16 @@ end %func
 
 
 %--------------------------------------------------------------------------
-% Retreive full path of a file
+% 7/26/2018 JJJ: Copied from GUI.m
 function [vcFile_full, S_dir] = fullpath_(vcFile)
-vcFile_full = [];
-S_dir = file_dir_(vcFile);
-if isempty(S_dir), return; end
-if numel(S_dir)~=1, vcFile_full = vcFile; return; end
-vcFile_full = fullfile(S_dir.folder, S_dir.name);
+[vcDir_, vcFile_, vcExt_] = fileparts(vcFile);
+if isempty(vcDir_) 
+    vcDir_ = pwd();
+    vcFile_full = fullfile(vcDir_, vcFile);
+else
+    vcFile_full = vcFile;
+end
+if nargout>=2, S_dir = dir(vcFile_full); end
 end %func
 
 
@@ -166,7 +170,7 @@ end %func
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
 vcVer = 'v0.2.3';
-vcDate = '7/25/2018';
+vcDate = '7/26/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -628,11 +632,16 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function hFig = figure_new_(vcTag)
-%remove prev tag duplication
-delete_multi_(findobj('Tag', vcTag, 'Type', 'Figure')); 
+function hFig = figure_new_(vcTag, vcTitle)
+if nargin<1, vcTag = ''; end
+if nargin<2, vcTitle = ''; end
 
-hFig = figure('Tag', vcTag);
+if ~isempty(vcTag)
+    %remove prev tag duplication
+    delete_multi_(findobj('Tag', vcTag, 'Type', 'Figure')); 
+else
+    hFig = figure('Tag', vcTag, 'Color', 'w', 'NumberTitle', 'off', 'Name', vcTitle);
+end
 end %func
 
 
@@ -806,8 +815,8 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function [mrPath, mrDur, S_trialset] = trialset_learningcurve_(vcFile_trialset)
-
+function [mrPath, mrDur, S_trialset, cS_probe] = trialset_learningcurve_(vcFile_trialset)
+% It loads the files
 % iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
 % run S141106_LearningCurve_Control.m first cell
 
@@ -816,23 +825,32 @@ S_trialset = load_trialset_(vcFile_trialset);
 [tiImg, vcType_uniq, vcAnimal_uniq, viImg, csFiles_Track] = ...
     struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'viImg', 'csFiles_Track');
 
-[trDur, trPath] = deal(nan(size(tiImg)));
+[trDur, trPath, trFps] = deal(nan(size(tiImg)));
 fprintf('Analyzing\n\t');
 warning off;
 t1 = tic;
+cS_probe = {};
 for iTrial = 1:numel(viImg)    
     try
-        if S_trialset.vlProbe(iTrial), continue; end
-        S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'xy0', 'vidFname');
-        iImg_ = viImg(iTrial);
-        trPath(iImg_) = trial_pathlen_(S_, pixpercm, angXaxis);
-        trDur(iImg_) = diff(S_.TC([1,end]));
+        S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'xy0', 'vidFname', 'FPS', 'img0'); 
+        iImg_ = viImg(iTrial);        
+        if S_trialset.vlProbe(iTrial)
+            cS_probe{end+1} = S_;
+        else
+            trPath(iImg_) = trial_pathlen_(S_, pixpercm, angXaxis);
+            trDur(iImg_) = diff(S_.TC([1,end]));
+        end
+        trFps(iImg_) = get_set_(S_, 'FPS', nan);        
         fprintf('.');
     catch
         disp(csFiles_Track{iTrial});
     end
 end %for
 fprintf('\n\ttook %0.1fs\n', toc(t1));
+
+% FPS integrity check
+hFig = plot_trialset_img_(S_trialset, trFps); 
+set(hFig, 'Name', sprintf('FPS: %s', vcFile_trialset));
 
 % compact by removing nan. 
 % date x session x animal (trPath,trDur) -> session x date x animal (trPath_,trDur_)
@@ -853,7 +871,7 @@ viCol = find(~any(isnan(mrPath)));
 [mrPath, mrDur] = deal(mrPath(:,viCol), mrDur(:,viCol));
 
 if nargout==0
-    figure; set(gcf,'Name',vcFile_trialset,'Color','w');
+    figure_new_('', ['Learning curve: ', vcFile_trialset]);
     subplot 211; errorbar_iqr_(mrPath); ylabel('Dist (m)'); grid on; xlabel('Session #');
     subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');
 end
@@ -948,10 +966,20 @@ msgbox(S_trialset.csMsg, file_part_(vcFile_trialset));
 disp_cs_(S_trialset.csMsg);
 disp_cs_(S_trialset.csMsg2);
 
-figure; set(gcf, 'Name', vcFile_trialset, 'Color', 'w');
+hFig = plot_trialset_img_(S_trialset, tiImg);
+set(hFig, 'Name', sprintf('Integrity check: %s', vcFile_trialset));
+end %func
+
+
+%--------------------------------------------------------------------------
+function hFig = plot_trialset_img_(S_trialset, tiImg, clim)
+if nargin<2, tiImg = S_trialset.tiImg; end
+if nargin<3, clim = [min(tiImg(:)), max(tiImg(:))]; end
+
+hFig = figure_new_('', S_trialset.vcFile_trialset);
 for iAnimal = 1:size(tiImg,3)
     subplot(1,size(tiImg,3),iAnimal);
-    imagesc_(tiImg(:,:,iAnimal));
+    imagesc_(tiImg(:,:,iAnimal), clim);
     ylabel('Dates'); xlabel('Trials'); 
     title(sprintf('Animal %s', S_trialset.vcAnimal_uniq(iAnimal)));    
 end %for
@@ -1034,7 +1062,7 @@ csMsg2 = { ...
     ['  ', fh4_(sort(csDataID_missing'))]
 };
 
-S_trialset = struct_add_(S_trialset, P, ...
+S_trialset = struct_add_(S_trialset, vcFile_trialset, P, ...
     csFiles_Track, csDir_trial, csMsg, csMsg2, ...
     tiImg, viDate, viTrial, viAnimal, viImg, ...
     vcAnimal_uniq, viDate_uniq, vcType_uniq, viTrial_uniq);
@@ -1051,9 +1079,14 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function imagesc_(mr)
-imagesc(mr, 'xdata', 1:size(mr,2), 'ydata', 1:size(mr,1));
-set(gca,'XTick', 1:size(mr,2)); 
+function imagesc_(mr, clim)
+if nargin<2, clim = []; end
+if isempty(clim)
+    imagesc(mr, 'xdata', 1:size(mr,2), 'ydata', 1:size(mr,1));
+else
+    imagesc(mr, 'xdata', 1:size(mr,2), 'ydata', 1:size(mr,1), clim);
+end
+set(gca,'XTick', 1:size(mr,2));
 set(gca,'YTick', 1:size(mr,1));
 axis([.5, size(mr,2)+.5, .5, size(mr,1)+.5]);
 grid on;
@@ -1107,6 +1140,8 @@ end %func
 
 %--------------------------------------------------------------------------
 function [csFiles, csDir] = find_files_(csDir, vcFile)
+% consider using (dir('**/*.mat') for example instead of finddir
+
 if ischar(csDir)
     if any(csDir=='*')
         csDir = find_dir_(csDir);
@@ -1116,8 +1151,9 @@ if ischar(csDir)
 end
 csFiles = {};
 for iDir=1:numel(csDir)
-    S_dir_ = dir(fullfile(csDir{iDir}, vcFile));
-    csFiles_ = cellfun(@(x,y)fullfile(x,y), {S_dir_.folder}, {S_dir_.name}, 'UniformOutput', 0);
+    vcDir_ = csDir{iDir};
+    S_dir_ = dir(fullfile(vcDir_, vcFile));
+    csFiles_ = cellfun(@(x)fullfile(vcDir_, x), {S_dir_.name}, 'UniformOutput', 0);
     csFiles = [csFiles, csFiles_];
 end %for
 end %func
@@ -1125,13 +1161,15 @@ end %func
 
 %--------------------------------------------------------------------------
 function csDir = find_dir_(vcDir)
+% accepts if vcDir contains a wildcard
+if ~any(vcDir=='*'), csDir = {vcDir}; return; end
+[vcDir_, vcFile_, vcExt_] = fileparts(vcDir);
+if ~isempty(vcExt_), csDir = {vcDir_}; return ;end
+
 S_dir = dir(vcDir);
 csDir = {S_dir.name};
-csFolder = {S_dir.folder};
-
 csDir_ = csDir([S_dir.isdir]);
-csFolder = csFolder([S_dir.isdir]);
-csDir = cellfun(@(x,y)fullfile(x,y), csFolder, csDir_, 'UniformOutput', 0);
+csDir = cellfun(@(x)fullfile(vcDir_, x), csDir_, 'UniformOutput', 0);
 end %func
 
 
@@ -1222,14 +1260,11 @@ quantLim = get_set_(S_trialset, 'quantLim', [1/8, 7/8]);
 [vrPath_early, vrPath_late, vrDur_early, vrDur_late, vrSpeed_early, vrSpeed_late] = ...
     trim_quantile_(vrPath_early, vrPath_late, vrDur_early, vrDur_late, vrSpeed_early, vrSpeed_late, quantLim);
 
-figure; 
-set(gcf, 'Name', vcFile_trialset, 'Color', 'w');
+figure_new_('', ['Early vs Late: ', vcFile_trialset]);
 subplot 131;
 bar_mean_sd_({vrPath_early, vrPath_late}, {'Early', 'Late'}, 'Pathlen (m)');
-
 subplot 132;
 bar_mean_sd_({vrDur_early, vrDur_late}, {'Early', 'Late'}, 'Duration (s)');
-
 subplot 133;
 bar_mean_sd_({vrSpeed_early, vrSpeed_late}, {'Early', 'Late'}, 'Speed (m/s)');
 

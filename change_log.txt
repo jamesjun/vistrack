@@ -1,6 +1,10 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.2.4, 7/26/2018]
+Compatible with Matlab R2014a version
+Added FPS plot in Learning curve
+
 [v0.2.3, 7/25/2018]
 GUI "Density" button made faster and improved
 Trialset "Bar plots" button added
