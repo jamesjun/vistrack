@@ -36,7 +36,8 @@ switch lower(vcCmd)
     case 'trialset-list', trialset_list_(vcArg1);    
     case 'trialset-learningcurve', trialset_learningcurve_(vcArg1);
     case 'trialset-barplots', trialset_barplots_(vcArg1);
-        
+    case 'trialset-probe', trialset_probe_(vcArg1);
+    
     otherwise, help_();
 end %switch
 if fReturn, return; end
@@ -169,7 +170,7 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.2.3';
+vcVer = 'v0.2.5';
 vcDate = '7/26/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
@@ -425,6 +426,8 @@ end %func
 
 %--------------------------------------------------------------------------
 function update_(vcVersion)
+fOverwrite = 1;
+
 if ~exist_dir_('.git')
     fprintf(2, 'Not a git repository. run "git clone https://github.com/jamesjun/vistrack"\n');
     return; 
@@ -436,8 +439,14 @@ S_cfg = load_cfg_();
 repoURL = 'https://github.com/jamesjun/vistrack';
 try
     if isempty(vcVersion)
-        code = system('git pull');
+        if fOverwrite
+            code = system('git fetch --all'); 
+            code = system('git reset --hard origin/master'); 
+        else
+            code = system('git pull'); % do not overwrite existing changes
+        end
     else
+        code = system('git fetch --all');         
         code = system(sprintf('git reset --hard "%s"', vcVersion));
     end
 catch
@@ -848,10 +857,6 @@ for iTrial = 1:numel(viImg)
 end %for
 fprintf('\n\ttook %0.1fs\n', toc(t1));
 
-% FPS integrity check
-hFig = plot_trialset_img_(S_trialset, trFps); 
-set(hFig, 'Name', sprintf('FPS: %s', vcFile_trialset));
-
 % compact by removing nan. 
 % date x session x animal (trPath,trDur) -> session x date x animal (trPath_,trDur_)
 [nDates, nSessions, nAnimals] = size(tiImg);
@@ -871,9 +876,14 @@ viCol = find(~any(isnan(mrPath)));
 [mrPath, mrDur] = deal(mrPath(:,viCol), mrDur(:,viCol));
 
 if nargout==0
+    % FPS integrity check
+    hFig = plot_trialset_img_(S_trialset, trFps); 
+    set(hFig, 'Name', sprintf('FPS: %s', vcFile_trialset));
+    
+    % Plot learning curve
     figure_new_('', ['Learning curve: ', vcFile_trialset]);
     subplot 211; errorbar_iqr_(mrPath); ylabel('Dist (m)'); grid on; xlabel('Session #');
-    subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');
+    subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');    
 end
 end %func
 
@@ -890,7 +900,7 @@ end %func
 function mr1 = quantile_mr_(mr, vrQ)
 mr1 = zeros(numel(vrQ), size(mr,2), 'like', mr);
 for i=1:size(mr,2)
-    mr1(:,i) = quantile_(mr(:,i), vrQ);
+    mr1(:,i) = quantile(mr(:,i), vrQ);
 end
 mr1 = mr1';
 end %func
@@ -1269,6 +1279,18 @@ subplot 133;
 bar_mean_sd_({vrSpeed_early, vrSpeed_late}, {'Early', 'Late'}, 'Speed (m/s)');
 
 msgbox(sprintf('Early Sessions: %s\nLate Sessions: %s', sprintf('%d ', viEarly), sprintf('%d ', viLate)));
+end %func
+
+
+%--------------------------------------------------------------------------
+function trialset_probe_(vcFile_trialset)
+% iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
+% run S141106_LearningCurve_Control.m first cell
+errordlg('Not implemented yet.'); return;
+
+[mrPath, mrDur, S_trialset, cS_probe] = trialset_learningcurve_(vcFile_trialset);
+trImg0 = cellfun(@(x)x.img0, cS_probe, 'UniformOutput', 0);
+% a = [cell2mat(cS_probe).img0;
 end %func
 
 

@@ -1247,6 +1247,7 @@ function btnProbeTrials_Callback(hObject, eventdata, handles)
 % hObject    handle to btnProbeTrials (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+vistrack('trialset-probe', get_str_(handles.editTrialSet));
 
 
 % --- Executes on button press in btnListFiles.

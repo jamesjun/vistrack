@@ -1,6 +1,10 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.2.5, 7/26/2018]
+Fixed quantile_ error (now requires Statistics and Machine learning toolbox)
+github update automatically overwrites changed files
+
 [v0.2.4, 7/26/2018]
 Compatible with Matlab R2014a version
 Added FPS plot in Learning curve
