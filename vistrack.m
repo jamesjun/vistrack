@@ -37,7 +37,8 @@ switch lower(vcCmd)
     case 'trialset-learningcurve', trialset_learningcurve_(vcArg1);
     case 'trialset-barplots', trialset_barplots_(vcArg1);
     case 'trialset-probe', trialset_probe_(vcArg1);
-    
+    case 'trialset-exportcsv', trialset_exportcsv_(vcArg1);
+
     otherwise, help_();
 end %switch
 if fReturn, return; end
@@ -170,8 +171,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.2.5';
-vcDate = '7/26/2018';
+vcVer = 'v0.2.6';
+vcDate = '7/27/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -788,11 +789,8 @@ end %func
 function P = load_settings_(handles)
 % P = load_settings_()
 % P = load_settings_(handles)
-
+if nargin<1, handles = []; end
 P = load_cfg_();
-P.vcFile_settings = get_set_(P, 'vcFile_settings', 'settings_vistrack.m');
-P.pixpercm = get_set_(P, 'pixpercm', 7.238);
-P.angXaxis = get_set_(P, 'angXaxis', -0.946);
 
 P_ = [];
 try    
@@ -830,10 +828,11 @@ function [mrPath, mrDur, S_trialset, cS_probe] = trialset_learningcurve_(vcFile_
 % run S141106_LearningCurve_Control.m first cell
 
 S_trialset = load_trialset_(vcFile_trialset);
-[pixpercm, angXaxis] = struct_get_(S_trialset.P, 'pixpercm', 'angXaxis');
+[pixpercm, angXaxis] = struct_get_(S_trialset, 'pixpercm', 'angXaxis');
 [tiImg, vcType_uniq, vcAnimal_uniq, viImg, csFiles_Track] = ...
     struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'viImg', 'csFiles_Track');
 
+hMsg = msgbox('Analyzing... (This closes automatically)');
 [trDur, trPath, trFps] = deal(nan(size(tiImg)));
 fprintf('Analyzing\n\t');
 warning off;
@@ -856,6 +855,7 @@ for iTrial = 1:numel(viImg)
     end
 end %for
 fprintf('\n\ttook %0.1fs\n', toc(t1));
+close_(hMsg);
 
 % compact by removing nan. 
 % date x session x animal (trPath,trDur) -> session x date x animal (trPath_,trDur_)
@@ -951,8 +951,53 @@ end %func
 %--------------------------------------------------------------------------
 function export_(handles)
 assignWorkspace_(handles);
-msgbox('"handles" struct assigned in workspace.');
-disp(handles);
+% export heading angles to CVS file
+[vcFile_cvs, mrTraj, vcMsg_cvs] = export_csv_(handles);
+assignWorkspace_(mrTraj);
+msgbox_({...
+    '"handles" struct and "mrTraj" assigned to the Workspace.', 
+    vcMsg_cvs, 
+    '  {T(s), X(m), Y(m), A(deg)}'});
+end %func
+
+
+%--------------------------------------------------------------------------
+function [vcFile_cvs, mrTraj, vcMsg] = export_csv_(S_trial, P)
+if nargin<2, P = []; end
+if isempty(P), P = load_settings_(); end
+
+fFilter = 1;
+vcFile_cvs = subsFileExt_(S_trial.vidFname, '_Track.cvs');
+
+% smooth the trajectory
+if fFilter
+    Xs = filtPos(S_trial.XC(:,2), P.TRAJ_NFILT, 1) / P.pixpercm / 100;
+    Ys = filtPos(S_trial.YC(:,2), P.TRAJ_NFILT, 1) / P.pixpercm / 100;
+else
+    Xs = S_trial.XC(:,2) / P.pixpercm / 100;
+    Ys = S_trial.YC(:,2) / P.pixpercm / 100;
+end
+mrTraj = [S_trial.TC(:), Xs, Ys, S_trial.AC(:,2)];
+csvwrite(vcFile_cvs, mrTraj);
+vcMsg = sprintf('Trajectory exported to %s', vcFile_cvs);
+
+if nargout==0, fprintf('%s\n', vcMsg); end
+end %func
+
+
+%--------------------------------------------------------------------------
+% 8/2/17 JJJ: added '.' if dir is empty
+% 7/31/17 JJJ: Substitute file extension
+function varargout = subsFileExt_(vcFile, varargin)
+% Substitute the extension part of the file
+% [out1, out2, ..] = subsFileExt_(filename, ext1, ext2, ...)
+
+[vcDir_, vcFile_, ~] = fileparts(vcFile);
+if isempty(vcDir_), vcDir_ = '.'; end
+for i=1:numel(varargin)
+    vcExt_ = varargin{i};    
+    varargout{i} = [vcDir_, filesep(), vcFile_, vcExt_];
+end
 end %func
 
 
@@ -1019,8 +1064,8 @@ end %func
 function S_trialset = load_trialset_(vcFile_trialset)
 % return [] if vcFile_trialset does not exist or 
 if ~exist_file_(vcFile_trialset), S_trialset = []; return; end
-S_trialset = file2struct(vcFile_trialset);
 P = load_settings_();
+S_trialset = file2struct(vcFile_trialset);
 [csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
 if isempty(csFiles_Track), return; end
     
@@ -1072,7 +1117,7 @@ csMsg2 = { ...
     ['  ', fh4_(sort(csDataID_missing'))]
 };
 
-S_trialset = struct_add_(S_trialset, vcFile_trialset, P, ...
+S_trialset = struct_add_(S_trialset, P, vcFile_trialset, ...
     csFiles_Track, csDir_trial, csMsg, csMsg2, ...
     tiImg, viDate, viTrial, viAnimal, viImg, ...
     vcAnimal_uniq, viDate_uniq, vcType_uniq, viTrial_uniq);
@@ -1286,11 +1331,125 @@ end %func
 function trialset_probe_(vcFile_trialset)
 % iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
 % run S141106_LearningCurve_Control.m first cell
-errordlg('Not implemented yet.'); return;
+% errordlg('Not implemented yet.'); return;
+
+[cS_probe, S_trialset, trImg0] = trialset_loadprobe_(vcFile_trialset);
+
+% create a table
+nFiles = numel(cS_probe);
+hFig_tbl = figure_new_('', ['Shape locations: ', vcFile_trialset]);
+tabgp = uitabgroup(hFig_tbl,'Position',[0 0 1 1]);
+vTab = arrayfun(@(i)uitab(tabgp, 'Title', num2str(i)), 1:nFiles);
+cTable = cell(nFiles, 1);
+for iFile = 1:nFiles
+    S_ = cS_probe{iFile};
+    t = uitable(vTab(iFile), 'Data', S_.mrPos_shape, ...
+        'Position', [10 10 400 300], 'RowName', S_trialset.P.csShapes, ...
+        'ColumnName', {'X pos (grid)', 'Y pos (grid)', 'Angle (deg)'});
+    t.ColumnEditable = true(1, 3);
+    cTable{iFile} = t;
+end
+implay(trImg0);
+uiwait(msgbox('Fill the table and press OK when done'));
+
+% save
+for iFile = 1:nFiles
+    cS_probe{iFile}.mrPos_shape = cTable{iFile}.Data;
+end
+close_(hFig_tbl);
+
+vcFile_mat = strrep(vcFile_trialset, '.trialset', '_trialset.mat');
+if exist_file_(vcFile_mat)
+    save(vcFile_mat, 'cS_probe', '-append');
+else
+    save(vcFile_mat, 'cS_probe');
+end
+msgbox_(['Shape info saved to ', vcFile_mat]);
+end %func
+
+
+%--------------------------------------------------------------------------
+function [cS_probe, S_trialset, trImg0] = trialset_loadprobe_(vcFile_trialset)
 
 [mrPath, mrDur, S_trialset, cS_probe] = trialset_learningcurve_(vcFile_trialset);
-trImg0 = cellfun(@(x)x.img0, cS_probe, 'UniformOutput', 0);
-% a = [cell2mat(cS_probe).img0;
+trImg0 = cellfun(@(x)imadjust(x.img0(1:2:end,1:2:end,1)), cS_probe, 'UniformOutput', 0);
+trImg0 = cat(3, trImg0{:});
+
+% default shape table
+csShapes = get_set_(S_trialset, 'csShapes', {'Triangle Lg', 'Triangle Sm', 'Square Lg', 'Square Sm', 'Circle Lg', 'Circle Sm'});
+csShapes = csShapes(:);
+nShapes = numel(csShapes);
+mrData0 = [nan(nShapes, 2), zeros(nShapes,1)];
+
+% load prev result
+vcFile_mat = strrep(vcFile_trialset, '.trialset', '_trialset.mat');
+[cTable_data, cS_probe_prev] = load_mat_(vcFile_mat, 'cTable_data', 'cS_probe');
+
+% fill in mrPos_shape
+csDataID = getDataID_cS_(cS_probe);
+csDataID_prev = getDataID_cS_(cS_probe_prev);
+for iFile = 1:numel(cS_probe)
+    S_ = cS_probe{iFile};
+    if isfield(S_, 'mrPos_shape'), continue; end
+    iPrev = find(strcmp(csDataID{iFile}, csDataID_prev));
+    if isempty(iPrev)
+        S_.mrPos_shape = mrData0;
+    else
+        S_.mrPos_shape = cS_probe_prev{iPrev}.mrPos_shape;
+    end
+    cS_probe{iFile} = S_;
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function csDataID = getDataID_cS_(cS)
+csDataID = cell(size(cS));
+for i=1:numel(cS)
+    [~,csDataID{i},~] = fileparts(cS{i}.vidFname);
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function h = msgbox_(vcMsg, fEcho)
+if nargin<2, fEcho = 1; end
+h = msgbox(vcMsg);
+if fEcho, disp(vcMsg); end
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/26/2018 JJJ: save mat file
+% function save_mat_(varargin)
+% vcFile = varargin{1};
+% for i=2:nargin
+%     eval('%s=varargin{%d};', inputname(i));
+% end
+% if exist_file_(vcFile)    
+%     save(vcFile, varargin{2:end}, '-append');
+% else
+%     save(vcFile, varargin{2:end});
+% end
+% end %func
+
+
+%--------------------------------------------------------------------------
+function varargout = load_mat_(varargin)
+if nargin<1, return; end
+vcFile_mat = varargin{1};
+varargout = cell(1, nargout());
+if ~exist_file_(vcFile_mat), return; end
+if nargin==1, S = load(vcFile_mat); return; end
+
+S = load(vcFile_mat, varargin{2:end});
+for iArg = 1:nargout()
+    try
+        varargout{iArg} = getfield(S, varargin{iArg+1});
+    catch
+        ;    
+    end
+end %for
 end %func
 
 
@@ -1438,5 +1597,33 @@ S_cfg.vcDir_commit = get_set_(S_cfg, 'vcDir_commit', 'D:\Dropbox\Git\vistrack\')
 S_cfg.csFiles_commit = get_set_(S_cfg, 'csFiles_commit', {'*.m', 'GUI.fig', 'change_log.txt', 'readme.txt', 'example.trialset', 'default.cfg'});
 S_cfg.csFiles_delete = get_set_(S_cfg, 'csFiles_delete', {'settings_vistrack.m', 'example.trialset', 'R12A2_Track.mat'});
 S_cfg.quantLim = get_set_(S_cfg, 'quantLim', [1/8, 7/8]);
+S_cfg.vcFile_settings = get_set_(S_cfg, 'vcFile_settings', 'settings_vistrack.m');
+S_cfg.pixpercm = get_set_(S_cfg, 'pixpercm', 7.238);
+S_cfg.angXaxis = get_set_(S_cfg, 'angXaxis', -0.946);
+
 end %func
 
+
+%--------------------------------------------------------------------------
+function trialset_exportcsv_(vcFile_trialset)
+
+S_trialset = load_trialset_(vcFile_trialset);
+csFiles_track = S_trialset.csFiles_Track;
+csFiles_failed = {};
+for iFile = 1:numel(csFiles_track)
+    try
+        S_ = load(csFiles_track{iFile}, 'XC', 'YC', 'AC', 'TC');
+        S_.vidFname = strrep(csFiles_track{iFile}, '_Track.mat', '.wmv');
+        export_csv_(S_, S_trialset.P);
+    catch
+        fprintf(2, 'Error loading %s\n', csFiles_track{iFile});
+%         fprintf(2, '  %s\n', lasterr());
+        csFiles_failed{end+1} = csFiles_track{iFile};
+    end
+end %for
+fprintf('CSV columns: {T(s), X(m), Y(m), A(deg)}\n');
+if ~isempty(csFiles_failed)
+    fprintf('Files failed to export due to loading error:\n');
+    cellfun(@(x)fprintf('  %s\n',x), csFiles_failed);
+end
+end %func

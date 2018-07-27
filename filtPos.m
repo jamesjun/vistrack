@@ -7,7 +7,7 @@ function [ y ] = filtPos( x, n, dimm)
 %x: input position
 %n: filter window
 %y: smoothed position
-
+if n<=1, y=x; return ;end
 if nargin < 2, n = 15; end
 if nargin < 3
     dimm = [];

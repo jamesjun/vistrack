@@ -1,5 +1,5 @@
 
-vcDir = 'G:\JunSpatial_Simone\Cue\'; % or 'E:\2013b\C*' to select each folders starting with C
+vcDir = 'G:\JunSpatial_Simone\Shuffled\'; % or 'E:\2013b\C*' to select each folders starting with C
 csAnimals = {'A','B','C','D'};
 csDir_excl = {};
 csFile_excl = {};

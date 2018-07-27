@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 26-Jul-2018 11:26:13
+% Last Modified by GUIDE v2.5 26-Jul-2018 14:21:02
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -1274,11 +1274,12 @@ function btnBarPlots_Callback(hObject, eventdata, handles)
 vistrack('trialset-barplots', get_str_(handles.editTrialSet));
 
 
-% --- Executes on button press in pushbutton66.
-function pushbutton66_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton66 (see GCBO)
+% --- Executes on button press in btnExportCsv.
+function btnExportCsv_Callback(hObject, eventdata, handles)
+% hObject    handle to btnExportCsv (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+vistrack('trialset-exportcsv', get_str_(handles.editTrialSet));
 
 
 % --- Executes on button press in pushbutton67.
@@ -1313,7 +1314,7 @@ function [FLIM, TC, img1, img00] = mov_flim_(vidobj, nFrames_load)
 % mov_flim_(): clear cache
 
 persistent csAns1 csAns2 csAns3 mov1
-if nargin==0, [csAns1, csAns2, csAns3] = deal([]); return; end %clear cache
+if nargin==0, [csAns1, csAns2, csAns3, mov1] = deal([]); return; end %clear cache
 
 if nargin<2, nFrames_load = 300; end % skip every 10 frames
 

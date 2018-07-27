@@ -1,6 +1,12 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.2.6, 7/27/2018]
+GUI "Export" button: exporting trajectory to .csv files
+  Columns contain time(s), x-pos(m), y-pos(m), head-orientation (deg)
+Added "Export to CSV" in Trialset which exports the trajectory of each files to .csv
+Added "Probe Trials" in Trialset which collects shape coordinates and saves to "_Trialset.mat" file.
+
 [v0.2.5, 7/26/2018]
 Fixed quantile_ error (now requires Statistics and Machine learning toolbox)
 github update automatically overwrites changed files
