@@ -178,7 +178,7 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.2.7';
+vcVer = 'v0.2.8';
 vcDate = '7/27/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
@@ -1448,7 +1448,7 @@ img0 = imadjust(binned_image_(S_.img0, P1.nSkip_img));
 % Crate axes
 hAxes = get_(S_fig, 'hAxes');
 if isempty(hAxes)
-    hAxes = axes(hFig_tbl, 'Units', 'pixels', 'Position', [10,300,1000,1000]);
+    hAxes = axes(hFig_tbl, 'Units', 'pixels', 'Position', [10,100,800,800]);
 end
 
 % draw figure
@@ -1478,7 +1478,7 @@ end
 hTable = get_(S_fig, 'hTable');
 if isempty(hTable)
     hTable = uitable(hFig_tbl, 'Data', S_.mrPos_shape, ...
-        'Position', [10 10 400 300], 'RowName', P1.csShapes, ...
+        'Position', [10 10 400 100], 'RowName', P1.csShapes, ...
         'ColumnName', {'X pos (grid)', 'Y pos (grid)', 'Angle (deg)'});
     hTable.ColumnEditable = true(1, 3);    
     hTable.CellEditCallback = @(a,b)draw_shapes_tbl_(hImage, hTable);

@@ -1,6 +1,9 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.2.8, 7/31/2018]
+Bugfix: "Input Coordinates" oversize issue is corrected.
+ 
 [v0.2.7, 7/31/2018]
 GUI "Density" button shows time spent per pixel
 Fixed "Learning curve" plot
