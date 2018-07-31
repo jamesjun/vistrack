@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 26-Jul-2018 14:21:02
+% Last Modified by GUIDE v2.5 30-Jul-2018 15:14:54
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -311,9 +311,7 @@ handles.csSettings = get(handles.editSettings, 'String');
 set(handles.panelPlot, 'Visible', 'on');
 set(handles.btnSave, 'Enable', 'on');
 guidata(hObject, handles);
-
-% Save
-btnSave_Callback(hObject, eventdata, handles);
+vistrack('trial-save', handles);
 
 
 % --- Executes on button press in btnSync.
@@ -334,7 +332,7 @@ ADCTC = load(get(handles.editADCfileTs, 'String'));
 disp_adc_title_(ADCTC);
 if ~exist('TLIM0', 'var')
     try
-        %load from spike2 TC channel        
+        %load from spike2 TC channel  
         prefix = getSpike2Prefix(ADCTC);
         chTCAM = getfield(ADCTC, sprintf('%s_Ch%d', prefix, ADC_CH_TCAM));
         chTCAM = chTCAM.times;
@@ -590,9 +588,10 @@ LOADSETTINGS;
 XC = handles.XC;
 YC = handles.YC;
 
-figure; imshow((handles.img0)); title('Posture trajectory (red: more recent, circle: head)');
+hFig = figure; 
+imshow((handles.img0)); title('Posture trajectory (red: more recent, circle: head)');
+resize_figure(hFig, [0,0,.5,1]);
 hold on;
-
 nframes = size(XC,1);
 nxy = size(XC,2);
 mrColor = jet(nframes);
@@ -604,9 +603,9 @@ for iframe=1:TRAJ_STEP:nframes
 end
 
 
-% --- Executes on button press in btnPlot4.
-function btnPlot4_Callback(hObject, eventdata, handles)
-% hObject    handle to btnPlot4 (see GCBO)
+% --- Executes on button press in btnEodRate.
+function btnEodRate_Callback(hObject, eventdata, handles)
+% hObject    handle to btnEodRate (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
@@ -639,7 +638,8 @@ mrColor = jet(256);
 % figure; plot(handles.TC, viColorRate);
 
 % Plot the EOD color representation
-figure; imagesc(handles.img0); 
+hFig = figure; 
+imagesc(handles.img0); 
 set(gca, {'XTick', 'YTick'}, {[],[]}); axis equal; axis tight;
 hold on; 
 title(sprintf('EOD (%s) at the head trajectory (red: higher rate)', chName));
@@ -649,6 +649,7 @@ for i=1:numel(viColorRate)
 %     plot(Xi(i), Yi(i), '.', 'color', mrColor(viColorRate(i),:));
 end
 colormap gray;
+resize_figure(hFig, [0 0 .5 1]);
 
 
 % --- Executes on button press in btnPlot1.
@@ -867,33 +868,39 @@ function btnPreview_CreateFcn(hObject, eventdata, handles)
 % handles    empty - handles not created until after all CreateFcns called
 
 
-% --- Executes on button press in pushbutton28.
-function pushbutton28_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton28 (see GCBO)
+% --- Executes on button press in btnPlotDensity.
+function btnPlotDensity_Callback(hObject, eventdata, handles)
+% hObject    handle to btnPlotDensity (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-LOADSETTINGS;
-h = msgbox('Calculating... (this will close automatically)');
-%track head
-[VISITCNT, TIMECNT] = calcVisitDensity(handles.img0, handles.TC, handles.XC(:,2), handles.YC(:,2), TRAJ_NFILT);
-try close(h); catch, end;   
+% vistrack('trial-visitcount', handles);
+vistrack('trial-visitcount', handles);
 
-[~, exprID, ~] = fileparts(handles.vidFname);
-img0_adj = imadjust(handles.img0);
-figure; 
-subplot 121; 
-imshow(rgbmix(img0_adj, imgray2rgb(TIMECNT), [], 'transparent'));   
-title(['Time density map: ', exprID]);
-
-subplot 122; 
-imshow(rgbmix(img0_adj, imgray2rgb(VISITCNT), [], 'transparent'));   
-title(['Visit density map: ', exprID]);    
-
-%update
-handles.TIMECNT = TIMECNT;
-handles.VISITCNT = VISITCNT;
-guidata(hObject, handles);
+% LOADSETTINGS;
+% h = msgbox('Calculating... (this will close automatically)');
+% 
+% % [mnVisit1, mnVisit] = calcVisitCount(vsTrialPool, img0, mlMask, nGrid);
+% 
+% %track head
+% [VISITCNT, TIMECNT] = calcVisitDensity(handles.img0, handles.TC, handles.XC(:,2), handles.YC(:,2), TRAJ_NFILT);
+% try close(h); catch, end;   
+% 
+% [~, exprID, ~] = fileparts(handles.vidFname);
+% img0_adj = imadjust(handles.img0);
+% figure; 
+% subplot 121; 
+% imshow(rgbmix(img0_adj, imgray2rgb(TIMECNT), [], 'transparent'));   
+% title(['Time density map: ', exprID]);
+% 
+% subplot 122; 
+% imshow(rgbmix(img0_adj, imgray2rgb(VISITCNT), [], 'transparent'));   
+% title(['Visit density map: ', exprID]);    
+% 
+% %update
+% handles.TIMECNT = TIMECNT;
+% handles.VISITCNT = VISITCNT;
+% guidata(hObject, handles);
 
 
 function editResultFile_Callback(hObject, eventdata, handles)
@@ -940,13 +947,8 @@ try
 
     % Apply settings
     set(handles.editSettings, 'String', S.csSettings);
-    csFields = {'TLIM0', 'FLIM0', 'FPS', ...
-        'MASK' ,'xy_init' ,'vec0' ,'xy0' ,'TC' ,'TLIM' ,'FLIM' ,'img1' ,'img00', ...
-        'SE' ,'thresh' ,'AreaTarget' ,'WINPOS' ,'img0', ...
-        'XC' ,'YC' ,'AC' ,'xy_names' ,'ang_names' ,'csSettings', ...
-        'ADC', 'ADCTS', ...
-        'MOV', 'XC_off', 'YC_off', 'vidFname', 'ESAC', 'vcVer', 'vcVer_date'};
-    handles = struct_merge_(handles, S, csFields);    
+    S_cfg = vistrack('load-cfg');
+    handles = struct_merge_(handles, S, S_cfg.csFields);
 
     set(handles.edit1, 'String', handles.vidFname);
     set(handles.editADCfile, 'String', [handles.vidFname(1:end-4), '_Rs.mat']);
@@ -973,33 +975,7 @@ function btnSave_Callback(hObject, eventdata, handles)
 % hObject    handle to btnSave (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
-handles.ESAC = calcESAC(handles);
-
-%save file
-h = msgbox('Saving... (this will close automatically)');    
-S_save = struct_copy_(handles, {'TLIM0', 'FLIM0', 'FPS', ...
-    'MASK' ,'xy_init' ,'vec0' ,'xy0' ,'TC' ,'TLIM' ,'FLIM' ,'img1' ,'img00', ...
-    'SE' ,'thresh' ,'AreaTarget' ,'WINPOS' ,'img0', ...
-    'XC' ,'YC' ,'AC' ,'xy_names' ,'ang_names' ,'csSettings', ...
-    'ADC', 'ADCTS', ...
-    'MOV', 'XC_off', 'YC_off', 'vidFname', 'ESAC'});
-[S_save.vcVer, S_save.vcVer_date] = vistrack('version');
-
-if exist_file_(handles.vidFname)
-    vcFile_mat = subsFileExt_(handles.vidFname, '_Track.mat');
-else
-    vcFile_mat = get(handles.editResultFile, 'String');
-end
-try
-    eval(sprintf('save(''%s'', ''-struct'', ''S_save'');', vcFile_mat));
-catch
-    fprintf(2, 'Save file failed: %s\n', vcFile_mat);
-end
-close_(h);
-set(handles.editResultFile, 'String', vcFile_mat);
-msgbox_(sprintf('Output saved to %s', fullpath_(vcFile_mat)));
-
+vistrack('trial-save', handles);
 
 % --- Executes during object creation, after setting all properties.
 function btnSave_CreateFcn(hObject, eventdata, handles)
@@ -1037,6 +1013,7 @@ hPlot = plot(XC(2), YC(2), 'go', XC(3:end), YC(3:end), 'mo',...
      X1, Y1, 'm-', XC(1), YC(1), 'g+', 'LineWidth', 2); %Mark the centroid
 hTitle = title(sprintf('F1: %d; T1: %0.3f s, Step: %d', ...
     iFrame, TC1(iFrame), REPLAY_STEP));
+resize_figure(hFig, [0,0,.5,1]);
 
 %setup timer
 Stimer = struct('hImg', hImg, 'TC1', TC1, 'hFig', hFig, 'hPlot', hPlot, 'iFrame', iFrame, ...
@@ -1055,6 +1032,7 @@ function btnFlip_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 LOADSETTINGS;
 iFrame = str2double(inputdlg('Frame #:', 'Flip orientation', 1, {''}));
+if isempty(iFrame), return ;end
 GUI_FLIP;
 % Save
 % btnSave_Callback(hObject, eventdata, handles);
@@ -1282,18 +1260,20 @@ function btnExportCsv_Callback(hObject, eventdata, handles)
 vistrack('trialset-exportcsv', get_str_(handles.editTrialSet));
 
 
-% --- Executes on button press in pushbutton67.
-function pushbutton67_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton67 (see GCBO)
+% --- Executes on button press in btnTrialsetFps.
+function btnTrialsetFps_Callback(hObject, eventdata, handles)
+% hObject    handle to btnTrialsetFps (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+vistrack('trialset-checkfps', get_str_(handles.editTrialSet));
 
 
-% --- Executes on button press in pushbutton68.
-function pushbutton68_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton68 (see GCBO)
+% --- Executes on button press in btnTrialsetCoordinates.
+function btnTrialsetCoordinates_Callback(hObject, eventdata, handles)
+% hObject    handle to btnTrialsetCoordinates (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+vistrack('trialset-coordinates', get_str_(handles.editTrialSet));
 
 
 % --- Executes on button press in pushbutton69.
@@ -1377,16 +1357,6 @@ function tmr = read_(vidobj, viF)
 h=msgbox('Loading video... (this will close automatically)'); drawnow;
 tmr = vid_read(vidobj, viF);
 close_(h);
-
-
-function S_save = struct_copy_(handles, csField)
-for i=1:numel(csField)
-    try
-        S_save.(csField{i}) = handles.(csField{i});
-    catch
-        S_save.(csField{i}) = []; % not copied
-    end
-end
 
 
 function vi=trim_(vi, a, b)
@@ -1513,3 +1483,33 @@ mov = mov(1:nSkip:end, 1:nSkip:end, :);
 %--------------------------------------------------------------------------
 function hTItle = title_(vc)
 hTItle = title(vc, 'Interpreter', 'none');
+
+
+% --- Executes on button press in btnFixSync.
+function btnFixSync_Callback(hObject, eventdata, handles)
+% hObject    handle to btnFixSync (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = vistrack('trial-fixsync', handles);
+guidata(hObject, handles);
+
+
+% --- Executes on button press in pushbutton78.
+function pushbutton78_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton78 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton81.
+function pushbutton81_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton81 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton82.
+function pushbutton82_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton82 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)

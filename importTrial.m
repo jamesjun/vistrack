@@ -1,10 +1,18 @@
 function S = importTrial(vcFile, pixpercm, angXaxis)
+% S = importTrial(vcFile, pixpercm, angXaxis)
+% S = importTrial(handles, pixpercm, angXaxis)
+LOADSETTINGS;
 if nargin<2, pixpercm = 1053.28/(sqrt(2)*100); end
 if nargin<3, angXaxis = -1.1590; end %degrees
 
-handles = load(vcFile);
+if ischar(vcFile)
+    handles = load(vcFile);
+elseif isstruct(vcFile)
+    handles = vcFile;
+    vcFile = subsFileExt(handles.vidFname, '_Trial.mat');
+end
 
-eval('settings');
+% eval('settings');
 [EODR, TEOD, chName] = getSpike2Chan(handles.ADC, ADC_CH_EODR);
 AMPL = getSpike2Chan(handles.ADC, ADC_CH_AMPL);
 EODA = smoothFilter(differentiate5(EODR, .01), 5);

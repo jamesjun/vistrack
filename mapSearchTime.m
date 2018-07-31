@@ -1,22 +1,20 @@
 function [RGB, mrPlot] = mapSearchTime(vsTrial, strVar, mode, lim, img0)
+% mode: {'time', 'visit', 'time/visit'}
+
 nGrid = 20;
 nTime = 25;
 angRot = -1.1590; %deg
 
 %---------------------
 % Format input
-if nargin < 2
-    strVar = [];
-end
+if nargin < 2, strVar = []; end
+if nargin < 3, mode = 'time/visit'; end
+if nargin < 4, lim = []; end
+if nargin < 5, img0 = []; end
+
 if ~isempty(strVar)
     IPI = poolTrials_IPI(vsTrial);
     vrZ = getfield(IPI, strVar);
-end
-if nargin < 4
-    lim = [];
-end
-if nargin < 5
-    img0 = [];
 end
 
 %background image processing
@@ -54,9 +52,7 @@ end
 
 mrTperV = mnTime ./ mnVisit;
 
-if nargin < 3
-    mode = 'time/visit';
-end
+
 switch lower(mode)
     case 'time'
         mrPlot = mnTime;

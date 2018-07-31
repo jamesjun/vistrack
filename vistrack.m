@@ -32,12 +32,19 @@ switch lower(vcCmd)
     case 'videoreader', varargout{1} = VideoReader_(vcArg1);
     case 'dependencies', disp_dependencies_();
     case 'download-sample', download_sample_();
+    case 'load-cfg', varargout{1} = load_cfg_();
+        
+    case 'trial-visitcount', trial_timemap_(vcArg1);
+    case 'trial-fixsync', varargout{1} = trial_fixsync_(vcArg1);
+    case 'trial-save', varargout{1} = trial_save_(vcArg1);
         
     case 'trialset-list', trialset_list_(vcArg1);    
     case 'trialset-learningcurve', trialset_learningcurve_(vcArg1);
     case 'trialset-barplots', trialset_barplots_(vcArg1);
-    case 'trialset-probe', trialset_probe_(vcArg1);
+%     case 'trialset-probe', trialset_probe_(vcArg1);
     case 'trialset-exportcsv', trialset_exportcsv_(vcArg1);
+    case 'trialset-checkfps', trialset_checkfps_(vcArg1);
+    case 'trialset-coordinates', trialset_coordinates_(vcArg1);
 
     otherwise, help_();
 end %switch
@@ -171,7 +178,7 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.2.6';
+vcVer = 'v0.2.7';
 vcDate = '7/27/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
@@ -302,6 +309,7 @@ end %func
 % 9/26/17 JJJ: Created and tested
 function flag = exist_file_(vcFile)
 if nargin<2, fVerbose = 0; end
+if ~ischar(vcFile), flag = 0; return; end
 if isempty(vcFile)
     flag = 0; 
 else
@@ -540,40 +548,6 @@ end %func
 
 
 %--------------------------------------------------------------------------
-% function xyLED = fixLedPos_(vidobj, FLIM1)
-% if nargin<2, FLIM1 = []; end
-% square_len = 50;
-% 
-% if isempty(FLIM1), FLIM1 = [1, 300]; end % show first 300 frames
-% FLIM1(2) = min(vidobj.NumberOfFrames, FLIM1(2));
-% try
-%     hMsg = msgbox('Loading video...');
-%     trImg = read(vidobj, FLIM1);
-%     close_(hMsg);
-% catch
-%     disperr_();
-%     xyLed = [];
-%     return;
-% end
-% trImg = squeeze(trImg(:,:,1,:));   % extract red color
-% % img_mean = uint8(mean(single(trImg),3));
-% % img_sd = (std(single(trImg),1,3));
-% img_pp = (max(trImg,[],3) - min(trImg,[],3));
-% [~,imax_pp] = max(img_pp(:));
-% [yLed, xLed] = ind2sub(size(img_pp), imax_pp);
-% 
-% hFig = create_figure_('fig_led', [0 0 1 1]); hold on;
-% % subplot 121; imshow(img_mean); axis equal;
-% imagesc(img_pp); axis tight; axis equal; colormap gray;
-% hold on; plot(xLed, yLed, 'ro');
-% % h_point = imrect(gca, [xLed, yLed, 0, 0] + square_len*[-.5,-.5,1,1])
-% % h_point.setColor('r');
-% 
-% % xyLED = ginput(1);
-% end %func
-
-
-%--------------------------------------------------------------------------
 % 17/12/5 JJJ: Error info is saved
 % Display error message and the error stack
 function disperr_(vcMsg, hErr)
@@ -636,22 +610,36 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function close_(hMsg)
-try close(hMsg); catch; end
+function close_(varargin)
+for i=1:nargin
+    v_ = varargin{i};
+    try 
+        if iscell(v_)
+            close_(v_{:});
+        elseif numel(v_)>1
+            close_(v_);
+        elseif numel(v_) == 1
+            close(v_); 
+        end
+    catch 
+        ;
+    end
+end
 end %func
 
 
 %--------------------------------------------------------------------------
-function hFig = figure_new_(vcTag, vcTitle)
+function hFig = figure_new_(vcTag, vcTitle, vrPos)
 if nargin<1, vcTag = ''; end
 if nargin<2, vcTitle = ''; end
+if nargin<3, vrPos = []; end
 
 if ~isempty(vcTag)
     %remove prev tag duplication
     delete_multi_(findobj('Tag', vcTag, 'Type', 'Figure')); 
-else
-    hFig = figure('Tag', vcTag, 'Color', 'w', 'NumberTitle', 'off', 'Name', vcTitle);
 end
+hFig = figure('Tag', vcTag, 'Color', 'w', 'NumberTitle', 'off', 'Name', vcTitle);
+if ~isempty(vrPos), resize_figure_(hFig, vrPos); drawnow; end
 end %func
 
 
@@ -715,7 +703,14 @@ end %func
 function delete_(varargin)
 for i=1:nargin()
     try
-        delete(varargin{i});
+        v_ = varargin{i};
+        if iscell(v_)
+            delete_(v_{:});
+        elseif numel(v_) > 1
+            for i=1:numel(v_), delete_(v_(i)); end
+        elseif numel(v_) == 1
+            delete(v_);
+        end
     catch
         ;
     end
@@ -791,7 +786,6 @@ function P = load_settings_(handles)
 % P = load_settings_(handles)
 if nargin<1, handles = []; end
 P = load_cfg_();
-
 P_ = [];
 try    
     csSettings = get(handles.editSettings, 'String');
@@ -822,13 +816,13 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function [mrPath, mrDur, S_trialset, cS_probe] = trialset_learningcurve_(vcFile_trialset)
+function [mrPath, mrDur, S_trialset, cS_trial] = trialset_learningcurve_(vcFile_trialset)
 % It loads the files
 % iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
 % run S141106_LearningCurve_Control.m first cell
 
 S_trialset = load_trialset_(vcFile_trialset);
-[pixpercm, angXaxis] = struct_get_(S_trialset, 'pixpercm', 'angXaxis');
+[pixpercm, angXaxis] = struct_get_(S_trialset.P, 'pixpercm', 'angXaxis');
 [tiImg, vcType_uniq, vcAnimal_uniq, viImg, csFiles_Track] = ...
     struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'viImg', 'csFiles_Track');
 
@@ -837,17 +831,17 @@ hMsg = msgbox('Analyzing... (This closes automatically)');
 fprintf('Analyzing\n\t');
 warning off;
 t1 = tic;
-cS_probe = {};
+cS_trial = {};
 for iTrial = 1:numel(viImg)    
     try
         S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'xy0', 'vidFname', 'FPS', 'img0'); 
         iImg_ = viImg(iTrial);        
-        if S_trialset.vlProbe(iTrial)
-            cS_probe{end+1} = S_;
-        else
+%         if S_trialset.vlProbe(iTrial)
+        cS_trial{end+1} = S_;
+%         else
             trPath(iImg_) = trial_pathlen_(S_, pixpercm, angXaxis);
             trDur(iImg_) = diff(S_.TC([1,end]));
-        end
+%         end
         trFps(iImg_) = get_set_(S_, 'FPS', nan);        
         fprintf('.');
     catch
@@ -884,6 +878,40 @@ if nargout==0
     figure_new_('', ['Learning curve: ', vcFile_trialset]);
     subplot 211; errorbar_iqr_(mrPath); ylabel('Dist (m)'); grid on; xlabel('Session #');
     subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');    
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function [S_trialset, trFps] = trialset_checkfps_(vcFile_trialset)
+% It loads the files
+% iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
+% run S141106_LearningCurve_Control.m first cell
+
+S_trialset = load_trialset_(vcFile_trialset);
+% [pixpercm, angXaxis] = struct_get_(S_trialset.P, 'pixpercm', 'angXaxis');
+[tiImg, vcType_uniq, vcAnimal_uniq, viImg, csFiles_Track] = ...
+    struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'viImg', 'csFiles_Track');
+
+hMsg = msgbox('Analyzing... (This closes automatically)');
+t1=tic;
+trFps = nan(size(tiImg));
+for iTrial = 1:numel(viImg)    
+    try
+        S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'xy0', 'vidFname', 'FPS', 'img0'); 
+        iImg_ = viImg(iTrial);        
+        trFps(iImg_) = get_set_(S_, 'FPS', nan);        
+        fprintf('.');
+    catch
+        disp(csFiles_Track{iTrial});
+    end
+end %for
+fprintf('\n\ttook %0.1fs\n', toc(t1));
+close_(hMsg);
+
+if nargout==0
+    hFig = plot_trialset_img_(S_trialset, trFps); 
+    set(hFig, 'Name', sprintf('FPS: %s', vcFile_trialset));
 end
 end %func
 
@@ -929,8 +957,7 @@ end %func
 
 %--------------------------------------------------------------------------
 function [xyStart, xyFood] = trial_xyStart_(S_trial, pixpercm, angXaxis)
-[~, dataID, ~] = fileparts(S_trial.vidFname);
-fishID = dataID(4);
+[dataID, fishID] = trial_id_(S_trial);
 switch fishID
     case 'A'
         xyStart = [55, 50]; xyFood = [0 -10]; angRot = 0;
@@ -952,7 +979,7 @@ end %func
 function export_(handles)
 assignWorkspace_(handles);
 % export heading angles to CVS file
-[vcFile_cvs, mrTraj, vcMsg_cvs] = export_csv_(handles);
+[vcFile_cvs, mrTraj, vcMsg_cvs] = export_csv_(handles, [], 0);
 assignWorkspace_(mrTraj);
 msgbox_({...
     '"handles" struct and "mrTraj" assigned to the Workspace.', 
@@ -962,12 +989,19 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function [vcFile_cvs, mrTraj, vcMsg] = export_csv_(S_trial, P)
+function [vcFile_cvs, mrTraj, vcMsg] = export_csv_(S_trial, P, fPlot)
 if nargin<2, P = []; end
+if nargin<3, fPlot = 0; end
 if isempty(P), P = load_settings_(); end
 
-fFilter = 1;
-vcFile_cvs = subsFileExt_(S_trial.vidFname, '_Track.cvs');
+fFilter = 0;
+[vcDir_, ~, ~] = fileparts(S_trial.vidFname);
+if exist_dir_(vcDir_)
+    vcFile_cvs = subsFileExt_(S_trial.vidFname, '_Track.cvs');
+else
+    vcFile_Track = get_(S_trial.editResultFile, 'String');
+    vcFile_cvs = strrep(vcFile_Track, '.mat', '.cvs');
+end
 
 % smooth the trajectory
 if fFilter
@@ -981,7 +1015,23 @@ mrTraj = [S_trial.TC(:), Xs, Ys, S_trial.AC(:,2)];
 csvwrite(vcFile_cvs, mrTraj);
 vcMsg = sprintf('Trajectory exported to %s', vcFile_cvs);
 
+if fPlot
+    hFig = figure_new_('', vcFile_cvs);
+    imshow(S_trial.img0); hold on;
+    resize_figure_(hFig, [0,0,.5,1]);
+    plot_chevron_(S_trial.XC(:,2:3), S_trial.YC(:,2:3));
+end
 if nargout==0, fprintf('%s\n', vcMsg); end
+end %func
+
+
+%--------------------------------------------------------------------------
+function plot_chevron_(mrX, mrY)
+nFrames = size(mrX,1);
+hold on;
+for iFrame=1:nFrames
+    plotChevron(mrX(iFrame,:), mrY(iFrame,:), [], 90, .3);
+end
 end %func
 
 
@@ -1027,14 +1077,15 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function hFig = plot_trialset_img_(S_trialset, tiImg, clim)
+function [hFig, vhImg] = plot_trialset_img_(S_trialset, tiImg, clim)
 if nargin<2, tiImg = S_trialset.tiImg; end
 if nargin<3, clim = [min(tiImg(:)), max(tiImg(:))]; end
 
-hFig = figure_new_('', S_trialset.vcFile_trialset);
+vhImg = zeros(size(tiImg,3), 1);
+hFig = figure_new_('FigOverview', S_trialset.vcFile_trialset, [.5,0,.5,1]);
 for iAnimal = 1:size(tiImg,3)
     subplot(1,size(tiImg,3),iAnimal);
-    imagesc_(tiImg(:,:,iAnimal), clim);
+    vhImg(iAnimal) = imagesc_(tiImg(:,:,iAnimal), clim);
     ylabel('Dates'); xlabel('Trials'); 
     title(sprintf('Animal %s', S_trialset.vcAnimal_uniq(iAnimal)));    
 end %for
@@ -1134,12 +1185,12 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function imagesc_(mr, clim)
+function hImg = imagesc_(mr, clim)
 if nargin<2, clim = []; end
 if isempty(clim)
-    imagesc(mr, 'xdata', 1:size(mr,2), 'ydata', 1:size(mr,1));
+    hImg = imagesc(mr, 'xdata', 1:size(mr,2), 'ydata', 1:size(mr,1));
 else
-    imagesc(mr, 'xdata', 1:size(mr,2), 'ydata', 1:size(mr,1), clim);
+    hImg = imagesc(mr, 'xdata', 1:size(mr,2), 'ydata', 1:size(mr,1), clim);
 end
 set(gca,'XTick', 1:size(mr,2));
 set(gca,'YTick', 1:size(mr,1));
@@ -1234,7 +1285,7 @@ if nargin<2, nRetry = []; end
 if isempty(nRetry), nRetry = 3; end % number of frames can change
 nThreads = 1; % disable parfor by setting it to 1. Parfor is slower
 
-fprintf('Loading Video: %s\n', vcFile_vid); t1=tic;
+fprintf('Opening Video: %s\n', vcFile_vid); t1=tic;
 cVidObj = cell(nRetry,1);
 fParfor = is_parfor_(nThreads);
 if fParfor
@@ -1328,76 +1379,412 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function trialset_probe_(vcFile_trialset)
+function trialset_coordinates_(vcFile_trialset)
 % iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
 % run S141106_LearningCurve_Control.m first cell
 % errordlg('Not implemented yet.'); return;
 
-[cS_probe, S_trialset, trImg0] = trialset_loadprobe_(vcFile_trialset);
+[cS_trial, S_trialset] = loadShapes_trialset_(vcFile_trialset);
+P = get_set_(S_trialset, 'P', load_cfg_());
 
-% create a table
-nFiles = numel(cS_probe);
-hFig_tbl = figure_new_('', ['Shape locations: ', vcFile_trialset]);
-tabgp = uitabgroup(hFig_tbl,'Position',[0 0 1 1]);
-vTab = arrayfun(@(i)uitab(tabgp, 'Title', num2str(i)), 1:nFiles);
-cTable = cell(nFiles, 1);
-for iFile = 1:nFiles
-    S_ = cS_probe{iFile};
-    t = uitable(vTab(iFile), 'Data', S_.mrPos_shape, ...
-        'Position', [10 10 400 300], 'RowName', S_trialset.P.csShapes, ...
-        'ColumnName', {'X pos (grid)', 'Y pos (grid)', 'Angle (deg)'});
-    t.ColumnEditable = true(1, 3);
-    cTable{iFile} = t;
-end
-implay(trImg0);
-uiwait(msgbox('Fill the table and press OK when done'));
+% show chart
+tnShapes = countShapes_trialset_(S_trialset, cS_trial);
+[hFig_overview, vhImg_overview] = plot_trialset_img_(S_trialset, single(tnShapes), [0, numel(P.csShapes)]); 
+set(hFig_overview, 'Name', sprintf('# Shapes: %s', vcFile_trialset));
+
+% create a table. make it navigatable
+nFiles = numel(cS_trial);
+hFig_tbl = figure_new_('FigShape', ['Shape locations: ', vcFile_trialset], [0,0,.5,1]);
+iTrial = 1;
+hFig_tbl.UserData = makeStruct_(S_trialset, P, cS_trial, iTrial, tnShapes, vhImg_overview);
+hFig_tbl.KeyPressFcn = @(h,e)keypress_FigShape_(h,e);
+plotShapes_trial_(hFig_tbl, iTrial);
+uiwait(msgbox('Right-click on the shapes and food to fill the table. Press "OK" when finished.'));
 
 % save
-for iFile = 1:nFiles
-    cS_probe{iFile}.mrPos_shape = cTable{iFile}.Data;
-end
-close_(hFig_tbl);
-
+if ~isvalid(hFig_tbl), msgbox('Table is closed by user, nothing is saved.'); return; end
+hMsgbox = msgbox('Saving... (This closes automatically)');
+S_fig = hFig_tbl.UserData;
 vcFile_mat = strrep(vcFile_trialset, '.trialset', '_trialset.mat');
-if exist_file_(vcFile_mat)
-    save(vcFile_mat, 'cS_probe', '-append');
-else
-    save(vcFile_mat, 'cS_probe');
-end
+save_var_(vcFile_mat, 'cS_trial', get_(S_fig, 'cS_trial'));
+close_(hFig_tbl, hFig_overview, hMsgbox);
 msgbox_(['Shape info saved to ', vcFile_mat]);
 end %func
 
 
 %--------------------------------------------------------------------------
-function [cS_probe, S_trialset, trImg0] = trialset_loadprobe_(vcFile_trialset)
+function save_var_(vcFile_mat, vcName, val)
+fAppend = exist_file_(vcFile_mat);
+eval(sprintf('%s=val;', vcName));
+if fAppend
+    try
+        save(vcFile_mat, vcName, '-v7.3', '-append', '-nocompression'); %faster    
+    catch
+        save(vcFile_mat, vcName, '-v7.3', '-append'); % backward compatible
+    end
+else
+    try
+        save(vcFile_mat, vcName, '-v7.3', '-nocompression'); %faster    
+    catch
+        save(vcFile_mat, vcName, '-v7.3'); % backward compatible
+    end
+end
+end %func
 
-[mrPath, mrDur, S_trialset, cS_probe] = trialset_learningcurve_(vcFile_trialset);
-trImg0 = cellfun(@(x)imadjust(x.img0(1:2:end,1:2:end,1)), cS_probe, 'UniformOutput', 0);
-trImg0 = cat(3, trImg0{:});
+
+%--------------------------------------------------------------------------
+function plotShapes_trial_(hFig_tbl, iTrial)
+% S_ = cS_trial{iFile};
+S_fig = hFig_tbl.UserData;
+S_ = S_fig.cS_trial{iTrial};
+
+P1 = S_fig.P;
+P1.nSkip_img = get_set_(P1, 'nSkip_img', 2);
+P1.xy0 = S_.xy0 / P1.nSkip_img;
+P1.pixpercm = P1.pixpercm / P1.nSkip_img;
+img0 = imadjust(binned_image_(S_.img0, P1.nSkip_img));
+[~,dataID_,~] = fileparts(S_.vidFname);    
+
+% Crate axes
+hAxes = get_(S_fig, 'hAxes');
+if isempty(hAxes)
+    hAxes = axes(hFig_tbl, 'Units', 'pixels', 'Position', [10,300,1000,1000]);
+end
+
+% draw figure
+hImage = get_(S_fig, 'hImage');
+if isempty(hImage)
+    hImage = imshow(img0, 'Parent', hAxes);
+    hold(hAxes, 'on');
+else
+    hImage.CData = img0;
+end
+hImage.UserData = P1;
+
+% draw a grid
+delete_(get_(S_fig, 'hGrid'));
+hGrid = draw_grid_(hImage, -10:5:10);
+
+% Title
+vcTitle = [dataID_, ' press ''h'' for help'];
+hTitle = get_(S_fig, 'hTitle');
+if isempty(hTitle)
+    hTitle = title(hAxes, vcTitle);
+else
+    hTitle.String = vcTitle;
+end
+
+% Draw a table
+hTable = get_(S_fig, 'hTable');
+if isempty(hTable)
+    hTable = uitable(hFig_tbl, 'Data', S_.mrPos_shape, ...
+        'Position', [10 10 400 300], 'RowName', P1.csShapes, ...
+        'ColumnName', {'X pos (grid)', 'Y pos (grid)', 'Angle (deg)'});
+    hTable.ColumnEditable = true(1, 3);    
+    hTable.CellEditCallback = @(a,b)draw_shapes_tbl_(hImage, hTable);
+else
+    hTable.Data = S_.mrPos_shape;
+end
+
+% Update
+delete_(get_(S_fig, 'vhShapes'));
+vhShapes = draw_shapes_tbl_(hImage, hTable);
+contextmenu_(hImage, hTable);
+hFig_tbl.UserData = struct_add_(S_fig, hAxes, hImage, hTable, hGrid, iTrial, vhShapes, vhShapes);
+end %func
+
+
+%--------------------------------------------------------------------------
+function keypress_FigShape_(hFig, event)
+S_fig = get(hFig, 'UserData');
+nStep = 1 + key_modifier_(event, 'shift')*3;
+nTrials = numel(S_fig.cS_trial);
+switch lower(event.Key)
+    case 'h'
+        msgbox({'[H]elp', '(Shift)+[L/R]: next trial (Shift: quick jump)', '[G]oto trial', '[Home]: First trial', '[END]: Last trial'});        
+    case {'leftarrow', 'rightarrow', 'home', 'end'}
+        % move to different trials and draw
+        iTrial_prev = S_fig.iTrial;
+        if strcmpi(event.Key, 'home')
+            iTrial = 1;
+        elseif strcmpi(event.Key, 'end')
+            iTrial = nTrials;
+        elseif strcmpi(event.Key, 'leftarrow')            
+            iTrial = max(S_fig.iTrial - nStep, 1);
+        elseif strcmpi(event.Key, 'rightarrow')
+            iTrial = min(S_fig.iTrial + nStep, nTrials);
+        end
+        if iTrial ~= iTrial_prev
+            plotShapes_trial_(hFig, iTrial);
+        end
+    case 'g'
+        vcTrial = inputdlg('Trial ID: ');
+        if isempty(vcTrial), return; end
+        csDataID = getDataID_cS_(S_fig.cS_trial);
+        iTrial = find(strcmp(vcTrial, csDataID));
+        if isempty(iTrial)
+            msgbox(['Trial not found: ', vcTrial]);
+            return; 
+        end        
+        plotShapes_trial_(hFig, iTrial);
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+% Check for shift, alt, ctrl press
+function flag = key_modifier_(event, vcKey)
+try
+    flag = any(strcmpi(event.Modifier, vcKey));
+catch
+    flag = 0;
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+% Count number of shapes input
+function tnShapes = countShapes_trialset_(S_trialset, cS_trial)
+[viImg, tiImg] = struct_get_(S_trialset, 'viImg', 'tiImg');
+tnShapes = zeros(size(tiImg), 'uint8');
+for iTrial = 1:numel(cS_trial)    
+    S_ = cS_trial{iTrial};
+    mrPos_shape = get_(S_, 'mrPos_shape');
+    if ~isempty(mrPos_shape)
+        tnShapes(viImg(iTrial)) = sum(~any(isnan(mrPos_shape), 2));
+    end
+end %for
+end %func
+
+
+%--------------------------------------------------------------------------
+function contextmenu_(hImg, tbl)
+c = uicontextmenu;
+hImg.UIContextMenu = c;
+P1 = hImg.UserData;
+% Create child menu items for the uicontextmenu
+csShapes = P1.csShapes;
+for iShape=1:numel(csShapes)
+    uimenu(c, 'Label', csShapes{iShape}, 'Callback',@setTable_);
+end
+uimenu(c, 'Label', '--------');
+uimenu(c, 'Label', 'Rotate', 'Callback',@setTable_);
+uimenu(c, 'Label', 'Delete', 'Callback',@setTable_);
+
+    function setTable_(source,callbackdata)   
+        xy = get(hImg.Parent, 'CurrentPoint');
+        xy_cm = pix2cm_(xy(1,1:2), P1); % scale factor
+        xy_grid = round(xy_cm / P1.cm_per_grid); 
+        iRow_nearest = findNearest_grid_(xy_grid, tbl.Data, 1);
+        switch lower(source.Label)
+            case 'rotate'                
+                if isempty(iRow_nearest), return; end
+                tbl.Data(iRow_nearest,3) = mod(tbl.Data(iRow_nearest,3)+90,360);
+            case 'delete'
+                if isempty(iRow_nearest), return; end
+                tbl.Data(iRow_nearest,:) = nan; %delete
+            otherwise
+                if ~isempty(iRow_nearest)
+                    tbl.Data(iRow_nearest,:) = nan; %delete
+                end
+                iRow = find(strcmp(tbl.RowName, source.Label));
+                tbl.Data(iRow,:) = [xy_grid(:)', 0];
+        end %switch
+        draw_shapes_tbl_(hImg, tbl);
+    end
+end %func
+
+
+%--------------------------------------------------------------------------
+function iRow_nearest = findNearest_grid_(xy_grid, mrGrid, d_max);
+d = pdist2(xy_grid(:)', mrGrid(:,1:2));
+iRow_nearest = find(d<=d_max, 1, 'first');
+end %func
+
+
+%--------------------------------------------------------------------------
+function h = draw_grid_(hImg, viGrid)
+P1 = hImg.UserData;
+[xx_cm, yy_cm] = meshgrid(viGrid);
+mrXY_pix = cm2pix_([xx_cm(:), yy_cm(:)] * P1.cm_per_grid, P1);
+h = plot(hImg.Parent, mrXY_pix(:,1), mrXY_pix(:,2), 'r+');
+end %func
+
+
+%--------------------------------------------------------------------------
+function vhPlot = draw_shapes_tbl_(hImg, tbl)
+P1 = hImg.UserData;
+delete_(get_(P1, 'vhPlot'));
+mrXY = tbl.Data;
+mrXY(:,1:2) = mrXY(:,1:2) * P1.cm_per_grid;
+nShapes = size(mrXY,1);
+vhPlot = zeros(nShapes, 1);
+for iShape = 1:nShapes
+    vcShape_ = strtok(tbl.RowName{iShape}, ' ');
+    vhPlot(iShape) = draw_shapes_img_(hImg, mrXY(iShape,:), P1.vrShapes(iShape), vcShape_);
+end
+P1.vhPlot = vhPlot;
+set(hImg, 'UserData', P1);
+
+% update
+hFig = hImg.Parent.Parent;
+S_fig = hFig.UserData;
+
+% % update figure count
+% vhImg_overview = get_(S_fig, 'vhImg_overview');
+% try
+%     S_trial = S_fig.cS_trial{S_fig.iTrial};
+%     iAnimal = 
+%     hImg = vhImg_overview{iAnimal};
+%     tnShapes = hImg_overview.CData;
+% %     tnShapes(r
+% catch
+%     ;
+% end
+
+% Save table data to fig userdata
+S_fig.cS_trial{S_fig.iTrial}.mrPos_shape = tbl.Data;
+S_fig.vhShapes = vhPlot;
+hFig.UserData = S_fig;
+end %func
+
+
+%--------------------------------------------------------------------------
+function flag = isvalid_(h)
+if isempty(h), flag = 0; return ;end
+try
+    flag = isvalid(h);
+catch
+    flag = 0;
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function h = draw_shapes_img_(hImg, xya, dimm, vcShape)
+% xya: xy0 and angle (cm and deg)
+h = nan; 
+if any(isnan(dimm)), return; end
+xy_ = xya(1:2);
+if any(isnan(xy_)), return; end
+
+P1 = hImg.UserData;
+if numel(xya)==3
+    ang = xya(3); 
+else
+    ang = 0;
+end
+switch upper(vcShape)
+    case 'TRIANGLE' % length is given
+        r_ = dimm(1)/sqrt(3);
+        vrA_ = [0, 120, 240, 0];
+    case {'CIRCLE', 'FOOD'} % diameter is given
+        r_ = dimm(1)/2;
+        vrA_ = [0:9:360]; 
+    case {'SQUARE', 'RECT', 'RECTANGLE'} % length is given
+        r_ = dimm(1);
+        vrA_ = [45:90:360+45];
+    otherwise, error(['draw_shapes_img_: invalid shape: ', vcShape]);
+end %switch
+mrXY_pix = cm2pix_(bsxfun(@plus, xy_(:)', rotate_line_(vrA_ + ang, r_)), P1);
+h = plot(hImg.Parent, mrXY_pix(:,1), mrXY_pix(:,2), 'g-', 'LineWidth', 1);
+end %func
+
+
+%--------------------------------------------------------------------------
+function xy_cm = pix2cm_(xy_pix, P1)
+xy_cm = bsxfun(@minus, xy_pix, P1.xy0(:)') / P1.pixpercm;
+xy_cm(:,2) = -xy_cm(:,2); % image coordinate to xy coordinate
+xy_cm = rotatexy_(xy_cm, -P1.angXaxis);
+end %func
+
+
+%--------------------------------------------------------------------------
+function xy_pix = cm2pix_(xy_cm, P1)
+xy_pix = xy_cm * P1.pixpercm;
+xy_pix(:,2) = -xy_pix(:,2); % change y axis
+xy_pix = bsxfun(@plus, rotatexy_(xy_pix, -P1.angXaxis), P1.xy0(:)');
+end %func
+
+
+%--------------------------------------------------------------------------
+function [ xy_rot ] = rotatexy_( xy, ang)
+%ROTATEXY rotate a vector with respect to the origin, ang in degree
+% xy = xy(:);
+CosA = cos(deg2rad(ang));
+SinA = sin(deg2rad(ang));
+M = [CosA, -SinA; SinA, CosA];
+xy_rot = (M * xy')';
+end
+
+
+%--------------------------------------------------------------------------
+% rotate a line and project. rotate from North
+function xy = rotate_line_(vrA_deg, r)
+if nargin<2, r=1; end
+vrA_ = pi/2 - vrA_deg(:)/180*pi;
+xy = r * [cos(vrA_), sin(vrA_)];
+end %func
+
+
+%--------------------------------------------------------------------------
+function img1 = binned_image_(img, nSkip, fFast)
+% fFast: set to 0 to do averaging (higher image quality)
+if nargin<3, fFast = 1; end
+if ndims(img)==3, img = img(:,:,1); end
+if fFast
+    img1 = img(1:nSkip:end, 1:nSkip:end); % faster
+else
+    dimm1 = floor(size(img)/nSkip);
+    viY = (0:dimm1(1)-1) * nSkip;
+    viX = (0:dimm1(2)-1) * nSkip;
+    img1 = zeros(dimm1, 'single');
+    for ix = 1:nSkip
+        for iy = 1:nSkip
+            img1 = img1 + single(img(viY+iy, viX+ix));
+        end
+    end
+    img1 = img1 / (nSkip*nSkip);
+    if isa(img, 'uint8'), img1 = uint8(img1); end
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function [cS_trial, S_trialset, trImg0] = loadShapes_trialset_(vcFile_trialset)
+
+[mrPath, mrDur, S_trialset, cS_trial] = trialset_learningcurve_(vcFile_trialset);
+nSkip_img = get_set_(S_trialset.P, 'nSkip_img', 2);
+if nargout>=3
+    trImg0 = cellfun(@(x)imadjust(binned_image_(x.img0, nSkip_img)), cS_trial, 'UniformOutput', 0);
+    trImg0 = cat(3, trImg0{:});
+end
 
 % default shape table
-csShapes = get_set_(S_trialset, 'csShapes', {'Triangle Lg', 'Triangle Sm', 'Square Lg', 'Square Sm', 'Circle Lg', 'Circle Sm'});
+csShapes = get_set_(S_trialset, 'csShapes', {'Triangle Lg', 'Triangle Sm', 'Square Lg', 'Square Sm', 'Circle Lg', 'Circle Sm', 'Food'});
 csShapes = csShapes(:);
 nShapes = numel(csShapes);
 mrData0 = [nan(nShapes, 2), zeros(nShapes,1)];
 
 % load prev result
 vcFile_mat = strrep(vcFile_trialset, '.trialset', '_trialset.mat');
-[cTable_data, cS_probe_prev] = load_mat_(vcFile_mat, 'cTable_data', 'cS_probe');
+[cTable_data, cS_trial_prev] = load_mat_(vcFile_mat, 'cTable_data', 'cS_trial');
 
 % fill in mrPos_shape
-csDataID = getDataID_cS_(cS_probe);
-csDataID_prev = getDataID_cS_(cS_probe_prev);
-for iFile = 1:numel(cS_probe)
-    S_ = cS_probe{iFile};
+csDataID = getDataID_cS_(cS_trial);
+csDataID_prev = getDataID_cS_(cS_trial_prev);
+for iFile = 1:numel(cS_trial)
+    S_ = cS_trial{iFile};
     if isfield(S_, 'mrPos_shape'), continue; end
     iPrev = find(strcmp(csDataID{iFile}, csDataID_prev));
-    if isempty(iPrev)
-        S_.mrPos_shape = mrData0;
-    else
-        S_.mrPos_shape = cS_probe_prev{iPrev}.mrPos_shape;
+    mrData_ = mrData0;
+    if ~isempty(iPrev)     
+        mrData_prev = cS_trial_prev{iPrev}.mrPos_shape;
+        nCol = min(nShapes, size(mrData_prev,1));
+        mrData_(1:nCol,:) = mrData_prev(1:nCol,:);
     end
-    cS_probe{iFile} = S_;
+    S_.mrPos_shape = mrData_;    
+    cS_trial{iFile} = S_;
 end
 end %func
 
@@ -1600,7 +1987,6 @@ S_cfg.quantLim = get_set_(S_cfg, 'quantLim', [1/8, 7/8]);
 S_cfg.vcFile_settings = get_set_(S_cfg, 'vcFile_settings', 'settings_vistrack.m');
 S_cfg.pixpercm = get_set_(S_cfg, 'pixpercm', 7.238);
 S_cfg.angXaxis = get_set_(S_cfg, 'angXaxis', -0.946);
-
 end %func
 
 
@@ -1627,3 +2013,456 @@ if ~isempty(csFiles_failed)
     cellfun(@(x)fprintf('  %s\n',x), csFiles_failed);
 end
 end %func
+
+
+%--------------------------------------------------------------------------
+function trial_gridmap_(vcFile_Track)
+S_trial = load_(vcFile_Track);
+P = load_settings_(S_trial);
+% LOADSETTINGS;
+h = msgbox('Calculating... (this will close automatically)');
+
+S_ = importTrial(S_trial, P.pixpercm, P.angXaxis);
+[RGB, mrPlot] = gridMap_(S_, P, 'time');
+% [mnVisit1, mnVisit] = calcVisitCount(S_, S_.img0);
+% dataID = S_trial
+figure_new_('', S_trial.vidFname); imshow(RGB);
+title('Time spent');
+try close(h); catch, end;   
+end %func
+
+
+%--------------------------------------------------------------------------
+function trial_timemap_(S_trial)
+P = load_settings_(S_trial);
+%track head
+h = msgbox('Calculating... (This closes automatically)');
+[VISITCNT, TIMECNT] = calcVisitDensity(S_trial.img0, S_trial.TC, S_trial.XC(:,2), S_trial.YC(:,2), P.TRAJ_NFILT);
+
+% trialID = trial_id_(handles);
+img0_adj = imadjust(S_trial.img0);
+hFig = figure_new_('', S_trial.vidFname); 
+imshow(rgbmix_(img0_adj, TIMECNT));
+resize_figure_(hFig, [0,0,.5,1]);
+title('Time map');
+close_(h);
+end %func
+
+
+%--------------------------------------------------------------------------
+function [dataID, fishID, iSession, iTrial, fProbe] = trial_id_(S_trial)
+[~,dataID,~] = fileparts(S_trial.vidFname);
+fishID = dataID(4);
+iSession = str2num(dataID(2:3));
+iTrial = str2num(dataID(5));
+fProbe = numel(dataID) > 5;
+end %func
+
+
+%--------------------------------------------------------------------------
+function [RGB, mrPlot] = gridMap_(vsTrial, P, mode, lim, mlMask)
+% mode: {'time', 'visit', 'time/visit'}
+
+if nargin < 2, P = []; end
+if nargin < 3, mode = 'time'; end % visit, time, time/visit
+if nargin < 4, lim = []; end
+if nargin < 5, mlMask = []; end
+
+nGrid_map = get_set_(P, 'nGrid_map', 20);
+nTime_map = get_set_(P, 'nTime_map', 25);
+angXaxis = get_set_(P, 'angXaxis', -1.1590); %deg
+
+if iscell(vsTrial), vsTrial = cell2mat(vsTrial); end % make it an array
+
+%background image processing
+xy0 = vsTrial(1).xy0;
+img0 = vsTrial(1).img0;    
+% mlMask = getImageMask(img0, [0 60], 'CENTRE');
+img0 = imrotate(imadjust(img0), angXaxis, 'nearest', 'crop');
+
+%rotate vrX, vrY, and images
+vrX = poolVecFromStruct(vsTrial, 'vrX');
+vrY = poolVecFromStruct(vsTrial, 'vrY');
+rotMat = rotz(angXaxis);    rotMat = rotMat(1:2, 1:2);
+mrXY = [vrX(:) - xy0(1), vrY(:) - xy0(2)] * rotMat;
+vrX = mrXY(:,1) + xy0(1);
+vrY = mrXY(:,2) + xy0(2);
+
+viX = ceil(vrX/nGrid_map);
+viY = ceil(vrY/nGrid_map);
+[h, w] = size(img0);
+h = h / nGrid_map;
+w = w / nGrid_map;
+mnVisit = zeros(h, w);
+mnTime = zeros(h, w);
+for iy=1:h
+    vlY = (viY == iy);
+    for ix=1:w
+        viVisit = find(vlY & (viX == ix));        
+        mnTime(iy,ix) = numel(viVisit);
+        nRepeats = sum(diff(viVisit) < nTime_map); % remove repeated counts
+        mnVisit(iy,ix) = numel(viVisit) - nRepeats;        
+    end
+end
+
+mrTperV = mnTime ./ mnVisit;
+
+
+switch lower(mode)
+    case 'time'
+        mrPlot = mnTime;
+    case 'visit'
+        mrPlot = mnVisit;
+    case 'time/visit'
+        mrPlot = mrTperV;
+end
+
+
+mnVisit1 = imresize(mrPlot, nGrid_map, 'nearest');
+% mnVisit1(~mlMask) = 0;
+
+if isempty(lim)
+    lim = [min(mnVisit1(:)) max(mnVisit1(:))];
+end
+
+mrVisit = uint8((mnVisit1 - lim(1)) / diff(lim) * 255);
+RGB = rgbmix_(img0, mrVisit, mlMask);
+end %func
+
+
+%--------------------------------------------------------------------------
+function img = rgbmix_(img_bk, img, MASK, mixRatio)
+
+if nargin<3, MASK = []; end
+if nargin<4, mixRatio = []; end
+
+if isempty(mixRatio), mixRatio = .25; end
+
+if numel(size(img_bk)) == 2 %gray scale
+    if ~isa(img_bk, 'uint8')
+        img_bk = uint8(img_bk/max(img_bk(:)));
+    end
+    img_bk = imgray2rgb(img_bk, [0 255], 'gray');
+end
+if numel(size(img)) == 2 %gray scale
+    if ~isempty(MASK), img(~MASK) = 0; end % clear non masked area (black)
+    if ~isa(img, 'uint8')
+        img = uint8(img/max(img(:))*255);
+    end
+    img = imgray2rgb(img, [0 255], 'jet');
+end
+
+for iColor = 1:3
+    mr1_ = single(img(:,:,iColor));
+    mr0_ = single(img_bk(:,:,iColor));
+    mr_ = mr1_*mixRatio + mr0_*(1-mixRatio);            
+    if isempty(MASK)
+        img(:,:,iColor) = uint8(mr_);
+    else
+        mr0_(MASK) = mr_(MASK);
+        img(:,:,iColor) = uint8(mr0_);
+    end
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function handles = trial_fixsync_(handles, fAsk)
+% Load video file from handle
+if nargin<2, fAsk = 1; end
+
+h=msgbox('Loading... (this will close automatically)');
+[vidobj, vcFile_vid] = load_vid_handle_(handles);
+if isempty(vidobj)
+    fprintf(2, 'Video file does not exist: %s\n', handles.vidFname);
+    close_(h);
+    return;
+end
+
+% load video, load LED until end of the video
+try
+    nFrames_load = handles.FLIM(2);
+catch
+    nFrames_load = vidobj.NumberOfFrames;
+end
+[vrLed_cam, viT_cam] = loadLed_vid_(vidobj, [], nFrames_load);
+viT_cam = fill_missing_(viT_cam);
+close_(h);
+handles.vidobj = vidobj;
+% figure; plot(vrLed); hold on; plot(viT_cam, vrLed(viT_cam), 'o'); 
+
+% get ADC timestamp
+vrT_adc = getSync_adc_(handles);
+nBlinks = min(numel(viT_cam), numel(vrT_adc));
+[viT_cam, vrT_adc] = deal(viT_cam(1:nBlinks), vrT_adc(1:nBlinks));
+
+% Compare errors
+vtLed_cam = interp1(viT_cam, vrT_adc, (1:numel(vrLed_cam)), 'linear', 'extrap');
+[vrX, vrY, TC] = deal(handles.XC(:,2), handles.YC(:,2), handles.TC(:));
+vrTC_new = interp1(viT_cam, vrT_adc, (handles.FLIM(1):handles.FLIM(2))', 'linear', 'extrap');
+vrT_err = TC - vrTC_new;
+P = load_cfg_();
+vrV = sqrt((vrX(3:end)-vrX(1:end-2)).^2 + (vrY(3:end)-vrY(1:end-2)).^2) / P.pixpercm / 100;
+vrV_prev = vrV ./ (TC(3:end) - TC(1:end-2));
+vrV_new = vrV ./ (vrTC_new(3:end) - vrTC_new(1:end-2));
+
+% plot
+hFig = figure_new_('', vcFile_vid); 
+ax(1) = subplot(3,1,1);
+plot(vtLed_cam, vrLed_cam); grid on; hold on;
+plot(vtLed_cam(viT_cam), vrLed_cam(viT_cam), 'ro');
+ylabel('LED');
+title(sprintf('FPS: %0.3f Hz', handles.FPS));
+
+ax(2) = subplot(3,1,2);
+plot(vrTC_new, vrT_err, 'r.'); grid on;
+title(sprintf('Sync error SD: %0.3fs', std(vrT_err))); 
+
+ax(3) = subplot(3,1,3); hold on;
+plot(vrTC_new(2:end-1), vrV_prev, 'ro-'); 
+plot(vrTC_new(2:end-1), vrV_new, 'go-'); grid on; 
+ylabel('Speed (m/s)'); xlabel('Time (s)');
+linkaxes(ax,'x');
+xlim(vrTC_new([1, end]));
+title(sprintf('Ave speed: %0.3f(old), %0.3f(new) m/s', mean(vrV_prev), mean(vrV_new)));
+% ylim([-.001, .001]); 
+
+fSave = 0;
+if fAsk
+    csAns = questdlg('Save time sync?', vcFile_vid, ifeq_(std(vrT_err) > .01, 'Yes', 'No'));
+    fSave = strcmpi(csAns, 'Yes');
+%     close_(hFig);
+end
+if fSave % save to file
+    handles.TC = vrTC_new;
+    handles.FPS = diff(handles.FLIM([1,end])) / diff(handles.TC([1,end]));
+    trial_save_(handles);
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function [vrLed, viT_cam] = loadLed_vid_(vidobj, xyLed, nFrames)
+if nargin<2, xyLed = []; end
+if nargin<3, nFrames = []; end
+nStep = 300;
+nParfor = 4;
+
+t1=tic;
+
+% Find LED
+if isempty(nFrames), nFrames = vidobj.NumberOfFrames; end
+flim = [1,min(nStep,nFrames)];
+mov_ = vid_read(vidobj, flim(1):flim(2));
+if isempty(xyLed), xyLed = findLed_mov_(mov_); end
+vrLed = mov2led_(mov_, xyLed);
+if flim(2) == nFrames, return; end
+
+% Load rest of the movie
+viFrame_start = (1:nStep:nFrames)';
+cvrLed = cell(size(viFrame_start));
+cvrLed{1} = vrLed;
+try
+    parfor (i = 2:numel(cvrLed), nParfor)
+        flim_ = viFrame_start(i) + [0, nStep-1];
+        flim_(2) = min(flim_(2), nFrames);
+        cvrLed{i} = mov2led_(vid_read(vidobj, flim_(1):flim_(2)), xyLed);
+    end
+catch
+    for iFrame1 = 2:numel(cvrLed)
+        flim_ = viFrame_start(i) + [0, nStep-1];
+        flim_(2) = min(flim_(2), nFrames);
+        cvrLed{i} = mov2led_(vid_read(vidobj, flim_(1):flim_(2)), xyLed);
+    end
+end
+vrLed = cell2mat(cvrLed);
+if nargout>=2
+    thresh_led = (max(vrLed) + median(vrLed))/2;
+    viT_cam = find(diff(vrLed > thresh_led)>0) + 1;
+end
+fprintf('LED loading took %0.1fs\n', toc(t1));
+end %func
+
+
+
+%--------------------------------------------------------------------------
+% Fill missing LED pulses
+function viT_new = fill_missing_(viT_cam, frac)
+if nargin<2, frac = []; end
+if isempty(frac), frac = .2; end % 20% variation is tolerated
+
+% vlPulse = false(1, numel(viT_cam));
+% vlPulse(viT_cam) = 1;
+vrTd = diff(viT_cam);
+tInt_med = median(vrTd);
+viMissing = find(vrTd > median(vrTd) * (1+frac));
+if ~isempty(viMissing)
+    viT_missing = round((viT_cam(viMissing) + viT_cam(viMissing+1))/2);
+    viT_new = sort([viT_cam(:); viT_missing(:)]); 
+else
+    viT_missing = [];
+    viT_new = viT_cam;    
+end
+fprintf('%d pulses inserted (before: %d, after: %d)\n', numel(viMissing), numel(viT_cam), numel(viT_new));
+if nargout==0    
+    figure; hold on; grid on;
+    plot(viT_cam, ones(size(viT_cam)), 'bo');
+    plot(viT_missing, ones(size(viT_missing)), 'ro');
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function vrLed = mov2led_(mov, xyLed)
+vrLed = squeeze(mean(mean(mov(xyLed(2)+[-1:1], xyLed(1)+[-1:1], :),1),2));
+end %func
+
+
+%--------------------------------------------------------------------------
+function vrT_adc = getSync_adc_(handles, P)
+if nargin<2, P=[]; end
+if isempty(P), P = load_settings_(handles); end
+
+ADCTC = get_(handles, 'ADCTS');
+if isempty(ADCTC), vrT_adc = []; return; end
+S_adc = getfield(ADCTC, sprintf('%s_Ch%d', getSpike2Prefix(ADCTC), P.ADC_CH_TCAM));
+vrT_adc = get_(S_adc, 'times');
+end %func
+
+
+%--------------------------------------------------------------------------
+function [vidobj, vcFile_vid] = load_vid_handle_(handles);
+vcFile_vid = handles.vidFname;
+vcFile_Track = get_(handles.editResultFile, 'String');
+if ~exist_file_(vcFile_vid)
+    vcFile_vid_ = subsDir_(vcFile_vid, vcFile_Track);
+    if ~exist_file_(vcFile_vid_)
+        vidobj = [];
+        return;
+    else
+        vcFile_vid = vcFile_vid_;
+    end
+end
+vidobj = get_(handles, 'vidobj');
+if isempty(vidobj)
+%     vidobj = load_vid_(vcFile_vid);
+    vidobj = VideoReader_(vcFile_vid);
+end
+end
+
+
+%--------------------------------------------------------------------------
+% 9/26/17 JJJ: Created and tested
+function vcFile_new = subsDir_(vcFile, vcDir_new)
+% vcFile_new = subsDir_(vcFile, vcFile_copyfrom)
+% vcFile_new = subsDir_(vcFile, vcDir_copyfrom)
+
+% Substitute dir
+if isempty(vcDir_new), vcFile_new = vcFile; return; end
+
+[vcDir_new,~,~] = fileparts(vcDir_new); % extrect directory part. danger if the last filesep() doesn't exist
+[vcDir, vcFile, vcExt] = fileparts(vcFile);
+vcFile_new = fullfile(vcDir_new, [vcFile, vcExt]);
+end % func
+
+
+%--------------------------------------------------------------------------
+function xyLed = findLed_mov_(trImg)
+img_pp = (max(trImg,[],3) - min(trImg,[],3));
+[~,imax_pp] = max(img_pp(:));
+[yLed, xLed] = ind2sub(size(img_pp), imax_pp);
+xyLed = [xLed, yLed];
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/30/2018 JJJ: Moved from GUI.m
+function vcFile_mat = trial_save_(handles)
+
+handles.ESAC = calcESAC(handles);
+
+[handles.vcVer, handles.vcVer_date] = version_();
+S_cfg = vistrack('load-cfg');
+S_save = struct_copy_(handles, S_cfg.csFields);
+
+if exist_file_(handles.vidFname)
+    vcFile_mat = subsFileExt_(handles.vidFname, '_Track.mat');
+else
+    vcFile_mat = get(handles.editResultFile, 'String');
+end
+set(handles.editResultFile, 'String', vcFile_mat);    
+
+h = msgbox('Saving... (this will close automatically)');    
+try
+    struct_save_(S_save, vcFile_mat, 0);
+%     eval(sprintf('save(''%s'', ''-struct'', ''S_save'');', vcFile_mat));
+    set(handles.editResultFile, 'String', vcFile_mat);    
+    msgbox_(sprintf('Output saved to %s', fullpath_(vcFile_mat)));   
+catch
+    fprintf(2, 'Save file failed: %s\n', vcFile_mat);
+end
+close_(h);
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/30/2018 JJJ: Moved from GUI.m
+function S_save = struct_copy_(handles, csField)
+for i=1:numel(csField)
+    try
+        S_save.(csField{i}) = handles.(csField{i});
+    catch
+        S_save.(csField{i}) = []; % not copied
+    end
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/24/2018: Copied from jrc3.m
+function out = ifeq_(if_, true_, false_)
+if (if_)
+    out = true_;
+else
+    out = false_;
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+% 7/30/18 JJJ: Copied from jrc3.m
+function struct_save_(S, vcFile, fVerbose)
+nRetry = 3;
+if nargin<3, fVerbose = 0; end
+if fVerbose
+    fprintf('Saving a struct to %s...\n', vcFile); t1=tic;
+end
+version_year = version('-release');
+version_year = str2double(version_year(1:end-1));
+if version_year >= 2017
+    for iRetry=1:nRetry
+        try
+            save(vcFile, '-struct', 'S', '-v7.3', '-nocompression'); %faster    
+            break;
+        catch
+            pause(.5);
+        end
+        fprintf(2, 'Saving failed: %s\n', vcFile);
+    end
+else    
+    for iRetry=1:nRetry
+        try
+            save(vcFile, '-struct', 'S', '-v7.3');   
+            break;
+        catch
+            pause(.5);
+        end
+        fprintf(2, 'Saving failed: %s\n', vcFile);
+    end    
+end
+if fVerbose
+    fprintf('\ttook %0.1fs.\n', toc(t1));
+end
+end %func
+
+

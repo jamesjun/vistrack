@@ -20,7 +20,7 @@ if numel(size(RGBbk)) == 2 %gray scale
     if isa(RGBbk, 'double')
         RGBbk = uint8(RGBbk/max(RGBbk(:)));
     end
-    RGBbk = imgray2rgb(RGBbk, [0 255], 'Gray');
+    RGBbk = imgray2rgb(RGBbk, [0 255], 'gray');
 end
 if numel(size(RGB)) == 2 %gray scale
     if ~isempty(MASK)
@@ -29,32 +29,31 @@ if numel(size(RGB)) == 2 %gray scale
     if isa(RGB, 'double')
         RGB = uint8(RGB/max(RGB(:))*255);
     end
-    RGB = imgray2rgb(RGB, [0 255], 'Jet');
+    RGB = imgray2rgb(RGB, [0 255], 'jet');
 end
 
-R = RGBbk(:,:,1);
-G = RGBbk(:,:,1);
-B = RGBbk(:,:,1);
+% R = RGBbk(:,:,1);
+% G = RGBbk(:,:,1);
+% B = RGBbk(:,:,1);
 
 switch mode
     case 'mix'
-        Rmix = uint8((RGB(:,:,1)*mixRatio + R*(1-mixRatio)));
-        Gmix = uint8((RGB(:,:,2)*mixRatio + G*(1-mixRatio)));
-        Bmix = uint8((RGB(:,:,3)*mixRatio + B*(1-mixRatio)));
-        if ~isempty(MASK)
-            R(MASK) = Rmix(MASK);
-            G(MASK) = Gmix(MASK);
-            B(MASK) = Bmix(MASK);
+        for iColor = 1:3
+            mr_ = uint8(RGB(:,:,iColor)*mixRatio + RGBbk(:,:,iColor)*(1-mixRatio));            
+            if isempty(MASK)
+                RGB(:,:,iColor) = mr_;
+            else
+                mr1_ = RGB(:,:,iColor);
+                mr1_(MASK) = mr_(MASK);
+                RGB(:,:,iColor) = mr1_;
+            end
         end
     case 'transparent'
         %mask is not used, instead RGBbk and RGB are simply added 50/50
-        R = uint8((RGB(:,:,1)*mixRatio + R*(1-mixRatio)));
-        G = uint8((RGB(:,:,2)*mixRatio + G*(1-mixRatio)));
-        B = uint8((RGB(:,:,3)*mixRatio + B*(1-mixRatio)));          
+        for iColor = 1:3
+            RGB(:,:,iColor) = uint8(RGB(:,:,iColor)*mixRatio + RGBbk(:,:,iColor)*(1-mixRatio));
+        end
     otherwise
         error('rgbmix invalid mode');
 end
-
-RGB(:,:,1) = R;
-RGB(:,:,2) = G;
-RGB(:,:,3) = B;
+end %func

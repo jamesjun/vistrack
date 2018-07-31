@@ -2,7 +2,9 @@
 function tmr = vid_read(vidobj, viF)
 nThreads = 4; % number of parallel threads to run for loading video
 
-fprintf('Loading video\n'); t1=tic;
+fprintf('Loading video (%s: %d-%d, %d frames)\n', ...
+    vidobj.Name, viF(1), viF(end), numel(viF)); 
+t1=tic;
 tmr = zeros(vidobj.Height, vidobj.Width, numel(viF), 'uint8');
 
 % parfor loading

@@ -33,14 +33,9 @@ for i=1:step:numel(Xi)
     IDXKILL = X < XLIM(1) | X > XLIM(2) | Y < YLIM(1) | Y > YLIM(2);
     X(IDXKILL) = [];            Y(IDXKILL) = [];
     
-    TIMECNT(Y,X) = TIMECNT(Y,X) + step;
-        
+    TIMECNT(Y,X) = TIMECNT(Y,X) + step;        
     idx = sub2ind(size(I0), Y, X);    
     idx2 = idx(HISTORY(idx) == 0); % keep non visited index
-    
-    % only update
-%     [idx1] = find(HISTORY>0);    
-%     idx2 = setdiff(idx, idx1);    %exclude recently updated values  
     if ~isempty(idx2)
         VISITCNT(idx2) = VISITCNT(idx2) + 1;
     end    
@@ -62,6 +57,4 @@ if nargout == 0
     subplot 122; 
     imshow(rgbmix(I0, imgray2rgb((VISITCNT))));  title('Visit density map');    
 end
-% toc
-
 end %func

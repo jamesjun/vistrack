@@ -1,6 +1,12 @@
 Visual Tracker (vistrack) change log
   James Jun, Maler Lab
 
+[v0.2.7, 7/31/2018]
+GUI "Density" button shows time spent per pixel
+Fixed "Learning curve" plot
+"Input Coordinates" button allows a user to input the shape locations and orientatoins.
+"Check FPS" button shows which trials have sync problem (fixable by loading the trial and hitting "Fix Sync" button).
+
 [v0.2.6, 7/27/2018]
 GUI "Export" button: exporting trajectory to .csv files
   Columns contain time(s), x-pos(m), y-pos(m), head-orientation (deg)

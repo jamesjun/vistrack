@@ -23,8 +23,11 @@ switch upper(strShape)
     h = imellipse(gca, [xy0(1)-d1/2, xy0(2)-d1/2, d1, d1]); %[x y w h]
     case 'SQUARE'
     h = imrect(gca, [xy0(1)-d1/2, xy0(2)-d1/2, d1, d1]); %[x y w h]
-    case 'RECT'
-    h = imrect(gca, [xy0(1)-d1(1)/2, xy0(2)-d1(2)/2, d1(1), d1(2)]); %[x y w h]    
+    case {'RECT', 'SQUARE'} %square
+    h = imrect(gca, [xy0(1)-d1(1)/2, xy0(2)-d1(2)/2, d1(1), d1(2)]); %[x y w h]  
+    case 'TRIANGLE' % equilateral triangle
+    mrXY = bsxfun(@plus, xy0(:)', d1 / sqrt(3) * rotate_([0, 120, 240]));
+    h = impoly(gca, mrXY);
 end
 mlMask = createMask(h);
 
@@ -48,4 +51,12 @@ else
     img1(mlMask) = 0;
     imshow(img1); 
 end
-end
+end %func
+
+
+%--------------------------------------------------------------------------
+% rotate a line and project. rotate from North
+function xy = rotate_(vrA_deg)
+vrA_ = pi/2 - vrA_deg(:)/180*pi;
+xy = [cos(vrA_), sin(vrA_)];
+end %func
