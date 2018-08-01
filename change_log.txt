@@ -1,5 +1,12 @@
 Visual Tracker (vistrack) change log
-  James Jun, Maler Lab
+  James Jun, Flatiron Institute
+
+[v0.2.9, 8/1/2018]
+Trialset "Export to CSV" exports trajectories and shape locations in the grid frame of reference.
+  Rotation and scale factor are corrected and saved in metric and degree units.
+  (0,0) position corresponds to the center of the aquarium where (x,y) axis intersects.
+  Angle is measured from the x-axis in counterclockwise orientation.
+  Trajectory files are saved to "_Track.csv" and shape locations are saved to "_shapes.csv" file.
 
 [v0.2.8, 7/31/2018]
 Bugfix: "Input Coordinates" oversize issue is corrected.

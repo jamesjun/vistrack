@@ -178,8 +178,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.2.8';
-vcDate = '7/27/2018';
+vcVer = 'v0.2.9';
+vcDate = '8/1/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -834,7 +834,8 @@ t1 = tic;
 cS_trial = {};
 for iTrial = 1:numel(viImg)    
     try
-        S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'xy0', 'vidFname', 'FPS', 'img0'); 
+        S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'AC', 'xy0', 'vidFname', 'FPS', 'img0'); 
+        S_.vcFile_Track = csFiles_Track{iTrial};
         iImg_ = viImg(iTrial);        
 %         if S_trialset.vlProbe(iTrial)
         cS_trial{end+1} = S_;
@@ -887,6 +888,7 @@ function [S_trialset, trFps] = trialset_checkfps_(vcFile_trialset)
 % It loads the files
 % iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
 % run S141106_LearningCurve_Control.m first cell
+fFix_sync = 0;
 
 S_trialset = load_trialset_(vcFile_trialset);
 % [pixpercm, angXaxis] = struct_get_(S_trialset.P, 'pixpercm', 'angXaxis');
@@ -899,6 +901,8 @@ trFps = nan(size(tiImg));
 for iTrial = 1:numel(viImg)    
     try
         S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'xy0', 'vidFname', 'FPS', 'img0'); 
+        S_.vcFile_Track = csFiles_Track{iTrial};
+        if fFix_sync, S_ = trial_fixsync_(S_, 0); end
         iImg_ = viImg(iTrial);        
         trFps(iImg_) = get_set_(S_, 'FPS', nan);        
         fprintf('.');
@@ -979,24 +983,25 @@ end %func
 function export_(handles)
 assignWorkspace_(handles);
 % export heading angles to CVS file
-[vcFile_cvs, mrTraj, vcMsg_cvs] = export_csv_(handles, [], 0);
+[vcFile_cvs, mrTraj, vcMsg_cvs, csFormat] = trial2csv_(handles, [], 0);
 assignWorkspace_(mrTraj);
-msgbox_({...
-    '"handles" struct and "mrTraj" assigned to the Workspace.', 
-    vcMsg_cvs, 
-    '  {T(s), X(m), Y(m), A(deg)}'});
+P = load_cfg_();
+msgbox_({'"handles" struct and "mrTraj" assigned to the Workspace.', 
+    vcMsg_cvs, csFormat{:}});
 end %func
 
 
 %--------------------------------------------------------------------------
-function [vcFile_cvs, mrTraj, vcMsg] = export_csv_(S_trial, P, fPlot)
+function [vcFile_cvs, mrTraj, vcMsg, csFormat] = trial2csv_(S_trial, P, fPlot)
 if nargin<2, P = []; end
 if nargin<3, fPlot = 0; end
 if isempty(P), P = load_settings_(); end
 
 fFilter = 0;
 [vcDir_, ~, ~] = fileparts(S_trial.vidFname);
-if exist_dir_(vcDir_)
+if exist_file_(get_(S_trial, 'vcFile_Track'))
+    vcFile_cvs = subsFileExt_(S_trial.vcFile_Track, '.csv');
+elseif exist_dir_(vcDir_)
     vcFile_cvs = subsFileExt_(S_trial.vidFname, '_Track.cvs');
 else
     vcFile_Track = get_(S_trial.editResultFile, 'String');
@@ -1005,15 +1010,33 @@ end
 
 % smooth the trajectory
 if fFilter
-    Xs = filtPos(S_trial.XC(:,2), P.TRAJ_NFILT, 1) / P.pixpercm / 100;
-    Ys = filtPos(S_trial.YC(:,2), P.TRAJ_NFILT, 1) / P.pixpercm / 100;
+    mrXY_pix = [ filtPos(S_trial.XC(:,2), P.TRAJ_NFILT, 1),
+        filtPos(S_trial.YC(:,2), P.TRAJ_NFILT, 1)];
 else
-    Xs = S_trial.XC(:,2) / P.pixpercm / 100;
-    Ys = S_trial.YC(:,2) / P.pixpercm / 100;
+    mrXY_pix = [S_trial.XC(:,2), S_trial.YC(:,2)];
 end
-mrTraj = [S_trial.TC(:), Xs, Ys, S_trial.AC(:,2)];
+P1 = setfield(P, 'xy0', S_trial.xy0);
+mrXY_m = pix2cm_(mrXY_pix, P1) / 100; % / P.pixpercm / 100;
+vrA_m = pix2cm_deg_(S_trial.AC(:,2), P1);
+mrTraj = [S_trial.TC(:), mrXY_m, vrA_m];
 csvwrite(vcFile_cvs, mrTraj);
 vcMsg = sprintf('Trajectory exported to %s', vcFile_cvs);
+
+% Export shape
+if isfield(S_trial, 'mrPos_shape')
+    vcFile_shapes = strrep(vcFile_cvs, '_Track.csv', '_shapes.csv');
+    cm_per_grid = get_set_(P, 'cm_per_grid', 5);
+    mrPos_shape_meter = S_trial.mrPos_shape * cm_per_grid / 100;
+    csvwrite(vcFile_shapes, mrPos_shape_meter);
+    vcMsg = sprintf('%s\nShapes exported to %s\n', vcMsg, vcFile_shapes);
+end
+
+csShapes = get_(P, 'csShapes');
+csFormat = {...
+    '_Track.csv files:  {T(s), X(m), Y(m), A(deg)}', 
+    '_shapes.csv files:', 
+    '  Columns: x(m), y(m), orientation(deg)', 
+    sprintf('  Rows: %s', sprintf('%s, ', csShapes{:}))};
 
 if fPlot
     hFig = figure_new_('', vcFile_cvs);
@@ -1023,6 +1046,13 @@ if fPlot
 end
 if nargout==0, fprintf('%s\n', vcMsg); end
 end %func
+
+
+%--------------------------------------------------------------------------
+function mrA1 = pix2cm_deg_(mrA, P1)
+angXaxis = get_set_(P1, 'angXaxis', 0);
+mrA1 = mod(-mrA - angXaxis,360);
+end
 
 
 %--------------------------------------------------------------------------
@@ -1448,7 +1478,7 @@ img0 = imadjust(binned_image_(S_.img0, P1.nSkip_img));
 % Crate axes
 hAxes = get_(S_fig, 'hAxes');
 if isempty(hAxes)
-    hAxes = axes(hFig_tbl, 'Units', 'pixels', 'Position', [10,100,800,800]);
+    hAxes = axes(hFig_tbl, 'Units', 'pixels', 'Position', [10,220,800,600]);
 end
 
 % draw figure
@@ -1478,7 +1508,7 @@ end
 hTable = get_(S_fig, 'hTable');
 if isempty(hTable)
     hTable = uitable(hFig_tbl, 'Data', S_.mrPos_shape, ...
-        'Position', [10 10 400 100], 'RowName', P1.csShapes, ...
+        'Position', [10 10 400 200], 'RowName', P1.csShapes, ...
         'ColumnName', {'X pos (grid)', 'Y pos (grid)', 'Angle (deg)'});
     hTable.ColumnEditable = true(1, 3);    
     hTable.CellEditCallback = @(a,b)draw_shapes_tbl_(hImage, hTable);
@@ -1993,25 +2023,22 @@ end %func
 %--------------------------------------------------------------------------
 function trialset_exportcsv_(vcFile_trialset)
 
-S_trialset = load_trialset_(vcFile_trialset);
-csFiles_track = S_trialset.csFiles_Track;
-csFiles_failed = {};
-for iFile = 1:numel(csFiles_track)
+% S_trialset = load_trialset_(vcFile_trialset);
+[cS_trial, S_trialset, trImg0] = loadShapes_trialset_(vcFile_trialset);
+% csFiles_track = S_trialset.csFiles_Track;
+% csFiles_failed = {};
+% for iFile = 1:numel(csFiles_track)
+for iFile = 1:numel(cS_trial)
+    S_ = cS_trial{iFile};
+    if isempty(S_), continue; end
     try
-        S_ = load(csFiles_track{iFile}, 'XC', 'YC', 'AC', 'TC');
-        S_.vidFname = strrep(csFiles_track{iFile}, '_Track.mat', '.wmv');
-        export_csv_(S_, S_trialset.P);
+        [~,~,vcMsg,csFormat] = trial2csv_(S_, S_trialset.P);
+        fprintf('%s\n', vcMsg);
     catch
-        fprintf(2, 'Error loading %s\n', csFiles_track{iFile});
-%         fprintf(2, '  %s\n', lasterr());
-        csFiles_failed{end+1} = csFiles_track{iFile};
+        disp(lasterr());
     end
 end %for
-fprintf('CSV columns: {T(s), X(m), Y(m), A(deg)}\n');
-if ~isempty(csFiles_failed)
-    fprintf('Files failed to export due to loading error:\n');
-    cellfun(@(x)fprintf('  %s\n',x), csFiles_failed);
-end
+disp_cs_(csFormat);
 end %func
 
 
@@ -2227,7 +2254,7 @@ xlim(vrTC_new([1, end]));
 title(sprintf('Ave speed: %0.3f(old), %0.3f(new) m/s', mean(vrV_prev), mean(vrV_new)));
 % ylim([-.001, .001]); 
 
-fSave = 0;
+fSave = 1; % save by default
 if fAsk
     csAns = questdlg('Save time sync?', vcFile_vid, ifeq_(std(vrT_err) > .01, 'Yes', 'No'));
     fSave = strcmpi(csAns, 'Yes');
@@ -2332,12 +2359,16 @@ end %func
 
 %--------------------------------------------------------------------------
 function [vidobj, vcFile_vid] = load_vid_handle_(handles);
+vidobj = [];
 vcFile_vid = handles.vidFname;
-vcFile_Track = get_(handles.editResultFile, 'String');
 if ~exist_file_(vcFile_vid)
+    try
+        vcFile_Track = get_(handles.editResultFile, 'String');
+    catch
+        vcFile_Track = get_(handles, 'vcFile_Track');
+    end
     vcFile_vid_ = subsDir_(vcFile_vid, vcFile_Track);
     if ~exist_file_(vcFile_vid_)
-        vidobj = [];
         return;
     else
         vcFile_vid = vcFile_vid_;
@@ -2345,7 +2376,6 @@ if ~exist_file_(vcFile_vid)
 end
 vidobj = get_(handles, 'vidobj');
 if isempty(vidobj)
-%     vidobj = load_vid_(vcFile_vid);
     vidobj = VideoReader_(vcFile_vid);
 end
 end
