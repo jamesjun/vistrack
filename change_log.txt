@@ -1,6 +1,10 @@
 Visual Tracker (vistrack) change log
   James Jun, Flatiron Institute
 
+[v0.3.0, 8/2/2018]
+Fixed csv export error. Orientation is correctly saved (previously divided by 20)
+Added a shortcut for "Input coordinates" figure: "[E]xport CSV" to export individual trial.
+
 [v0.2.9, 8/1/2018]
 Trialset "Export to CSV" exports trajectories and shape locations in the grid frame of reference.
   Rotation and scale factor are corrected and saved in metric and degree units.

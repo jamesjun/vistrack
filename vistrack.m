@@ -178,8 +178,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.2.9';
-vcDate = '8/1/2018';
+vcVer = 'v0.3.0';
+vcDate = '8/2/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -1020,15 +1020,16 @@ mrXY_m = pix2cm_(mrXY_pix, P1) / 100; % / P.pixpercm / 100;
 vrA_m = pix2cm_deg_(S_trial.AC(:,2), P1);
 mrTraj = [S_trial.TC(:), mrXY_m, vrA_m];
 csvwrite(vcFile_cvs, mrTraj);
-vcMsg = sprintf('Trajectory exported to %s', vcFile_cvs);
+vcMsg = sprintf('Trajectory exported to %s\n', vcFile_cvs);
 
 % Export shape
 if isfield(S_trial, 'mrPos_shape')
     vcFile_shapes = strrep(vcFile_cvs, '_Track.csv', '_shapes.csv');
     cm_per_grid = get_set_(P, 'cm_per_grid', 5);
-    mrPos_shape_meter = S_trial.mrPos_shape * cm_per_grid / 100;
+    mrPos_shape_meter = S_trial.mrPos_shape;
+    mrPos_shape_meter(:,1:2) = mrPos_shape_meter(:,1:2) * cm_per_grid / 100;
     csvwrite(vcFile_shapes, mrPos_shape_meter);
-    vcMsg = sprintf('%s\nShapes exported to %s\n', vcMsg, vcFile_shapes);
+    vcMsg = sprintf('%sShapes exported to %s\n', vcMsg, vcFile_shapes);
 end
 
 csShapes = get_(P, 'csShapes');
@@ -1044,7 +1045,10 @@ if fPlot
     resize_figure_(hFig, [0,0,.5,1]);
     plot_chevron_(S_trial.XC(:,2:3), S_trial.YC(:,2:3));
 end
-if nargout==0, fprintf('%s\n', vcMsg); end
+if nargout==0
+    fprintf('%s', vcMsg); 
+    disp_cs_(csFormat);
+end
 end %func
 
 
@@ -1531,7 +1535,12 @@ nStep = 1 + key_modifier_(event, 'shift')*3;
 nTrials = numel(S_fig.cS_trial);
 switch lower(event.Key)
     case 'h'
-        msgbox({'[H]elp', '(Shift)+[L/R]: next trial (Shift: quick jump)', '[G]oto trial', '[Home]: First trial', '[END]: Last trial'});        
+        msgbox({'[H]elp', 
+            '(Shift)+[L/R]: next trial (Shift: quick jump)', 
+            '[G]oto trial', 
+            '[Home]: First trial', 
+            '[END]: Last trial', 
+            '[E]xport coordinates to csv'}, 'Shortcuts');        
     case {'leftarrow', 'rightarrow', 'home', 'end'}
         % move to different trials and draw
         iTrial_prev = S_fig.iTrial;
@@ -1557,6 +1566,9 @@ switch lower(event.Key)
             return; 
         end        
         plotShapes_trial_(hFig, iTrial);
+    case 'e'
+        S_trial = S_fig.cS_trial{S_fig.iTrial};
+        trial2csv_(S_trial);
 end
 end %func
 
