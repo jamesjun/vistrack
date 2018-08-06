@@ -178,8 +178,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.3.0';
-vcDate = '8/2/2018';
+vcVer = 'v0.3.1';
+vcDate = '8/6/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -1032,12 +1032,34 @@ if isfield(S_trial, 'mrPos_shape')
     vcMsg = sprintf('%sShapes exported to %s\n', vcMsg, vcFile_shapes);
 end
 
+% Export relations between the trajectory and shapes
+if isfield(S_trial, 'mrPos_shape')
+    vcFile_relations = strrep(vcFile_cvs, '_Track.csv', '_relations.csv');    
+    mrRelations = calc_relations_(mrTraj, mrPos_shape_meter, P1);
+    csvwrite(vcFile_relations, mrRelations);
+    vcMsg = sprintf('%srelations exported to %s\n', vcMsg, vcFile_relations);
+end
+
 csShapes = get_(P, 'csShapes');
 csFormat = {...
-    '_Track.csv files:  {T(s), X(m), Y(m), A(deg)}', 
+    '_Track.csv files:', 
+    '  Columns: T(s), X(m), Y(m), A(deg):',
+    '    T: camera frame time',
+    '    X: x coordinate of the head tip @ grid frame of reference',
+    '    Y: y coordinate of the head tip @ grid frame of reference',
+    '    A: head orientation',
     '_shapes.csv files:', 
-    '  Columns: x(m), y(m), orientation(deg)', 
-    sprintf('  Rows: %s', sprintf('%s, ', csShapes{:}))};
+    '  Columns: X(m), Y(m), A(deg):',
+    '    X(m): x coordinate of the shape center @ grid frame of reference',
+    '    Y(m): y coordinate of the shape center @ grid frame of reference',
+    '    A(deg): Shape orientation',
+    sprintf('  Rows: %s', sprintf('"%s", ', csShapes{:})),     
+    '_relations.csv files:',
+    sprintf('  Columns: T(s), D_F(m), A_E(deg), %s', sprintf('L_"%s"(bool), ', csShapes{:})),
+    '    T: camera frame time',
+    '    D_F: distance to the food', 
+    '    A_E: heading angle error (food_vec - head_vec, 0..90 deg)',    
+    '    L_"x": Is shape "x" adjacent to the head position? 0:no, 1:yes'};    
 
 if fPlot
     hFig = figure_new_('', vcFile_cvs);
@@ -1049,6 +1071,63 @@ if nargout==0
     fprintf('%s', vcMsg); 
     disp_cs_(csFormat);
 end
+end %func
+
+
+%--------------------------------------------------------------------------
+function mrRelations = calc_relations_(mrTraj, mrPos_shape_meter, P)
+if nargin<3, P = []; end
+if isempty(P), P = load_settings_(); end
+
+[T, mrXY_h, A_H] = deal(mrTraj(:,1), mrTraj(:,2:3), mrTraj(:,end));
+vrXY_food = mrPos_shape_meter(end,1:2);
+mrV_F = bsxfun(@minus, vrXY_food, mrXY_h);
+[A_F, D_F] = cart2pol_(mrV_F(:,1), mrV_F(:,2));
+A_E = min(mod(A_F-A_H, 180), mod(A_H-A_F, 180));
+
+% determine shape mask
+dist_cut = get_set_(P, 'dist_cm_shapes', 3) / 100; % in meters
+nShapes = size(mrPos_shape_meter,1);
+mlL_shapes = false(numel(T), nShapes);
+for iShape = 1:nShapes
+    vcShape = strtok(P.csShapes{iShape}, ' ');
+    xya_ = mrPos_shape_meter(iShape,:);
+    len_ = P.vrShapes(iShape)/100;
+    [mrXY_poly_, fCircle] = get_polygon_(vcShape, xya_(1:2), len_, xya_(3));
+    if fCircle
+        vrD_ = hypot(xya_(1)-mrXY_h(:,1), xya_(2)-mrXY_h(:,2)) - len_/2; 
+    else %polygon
+        vrD_ = nearest_perimeter_(mrXY_poly_/100, mrXY_h); % convert to meter
+    end
+    mlL_shapes(:,iShape) = vrD_ <= dist_cut;
+end
+
+mrRelations = [T, D_F, A_E, mlL_shapes];
+end %func
+
+
+%--------------------------------------------------------------------------
+function vrD_ = nearest_perimeter_(mrXY_p, mrXY_h)
+% mrXY_p: polygon vertices
+nInterp = 100;
+
+mrXY_ = [mrXY_p; mrXY_p(1,:)]; % wrap
+mrXY_int = interp1(1:size(mrXY_,1), mrXY_, 1:1/nInterp:size(mrXY_,1));
+vrD_ = min(pdist2(mrXY_int, mrXY_h))';
+
+if nargout==0
+    figure; hold on;
+    plot(mrXY_int(:,1), mrXY_int(:,2), 'b.-');
+    plot(mrXY_h(:,1), mrXY_h(:,2), 'r.-');
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function [th_deg, r] = cart2pol_(x,y)
+% th: degrees
+th_deg = atan2(y,x).*(180/pi);
+r = hypot(x,y);
 end %func
 
 
@@ -1467,6 +1546,15 @@ end %func
 
 
 %--------------------------------------------------------------------------
+function plotTraj_trial_(hFig_tbl, iTrial)
+S_fig = hFig_tbl.UserData;
+delete_(get_(S_fig, 'hTraj'));
+hTraj = plot(S_fig);
+hFig_tbl.UserData = struct_add_(S_fig, hTraj);
+end %func
+
+        
+%--------------------------------------------------------------------------
 function plotShapes_trial_(hFig_tbl, iTrial)
 % S_ = cS_trial{iFile};
 S_fig = hFig_tbl.UserData;
@@ -1476,7 +1564,7 @@ P1 = S_fig.P;
 P1.nSkip_img = get_set_(P1, 'nSkip_img', 2);
 P1.xy0 = S_.xy0 / P1.nSkip_img;
 P1.pixpercm = P1.pixpercm / P1.nSkip_img;
-img0 = imadjust(binned_image_(S_.img0, P1.nSkip_img));
+img0 = imadjust_mask_(binned_image_(S_.img0, P1.nSkip_img));
 [~,dataID_,~] = fileparts(S_.vidFname);    
 
 % Crate axes
@@ -1500,7 +1588,7 @@ delete_(get_(S_fig, 'hGrid'));
 hGrid = draw_grid_(hImage, -10:5:10);
 
 % Title
-vcTitle = [dataID_, ' press ''h'' for help'];
+vcTitle = [dataID_, '  [H]elp, [T]rajectory, [L/R]:Next/Prev, [G]oto, [E]xport ...'];
 hTitle = get_(S_fig, 'hTitle');
 if isempty(hTitle)
     hTitle = title(hAxes, vcTitle);
@@ -1529,18 +1617,34 @@ end %func
 
 
 %--------------------------------------------------------------------------
+function img_adj = imadjust_mask_(img, mlMask)
+if nargin<2, mlMask = []; end
+if isempty(mlMask)
+    int_lim = quantile(img(img>0), [.01, .99]);
+else
+    int_lim = quantile(img(~mlMask), [.01, .99]);
+end
+% imadjust excluding the mask
+img_adj = imadjust(img, double(int_lim)/255, [0, 1]);
+end %func
+
+
+%--------------------------------------------------------------------------
 function keypress_FigShape_(hFig, event)
 S_fig = get(hFig, 'UserData');
 nStep = 1 + key_modifier_(event, 'shift')*3;
 nTrials = numel(S_fig.cS_trial);
 switch lower(event.Key)
     case 'h'
-        msgbox({'[H]elp', 
+        msgbox(...
+            {'[H]elp', 
             '(Shift)+[L/R]: next trial (Shift: quick jump)', 
             '[G]oto trial', 
             '[Home]: First trial', 
             '[END]: Last trial', 
-            '[E]xport coordinates to csv'}, 'Shortcuts');        
+            '[E]xport coordinates to csv'
+            '[T]rajectory toggle'}, ...
+                'Shortcuts');        
     case {'leftarrow', 'rightarrow', 'home', 'end'}
         % move to different trials and draw
         iTrial_prev = S_fig.iTrial;
@@ -1556,6 +1660,9 @@ switch lower(event.Key)
         if iTrial ~= iTrial_prev
             plotShapes_trial_(hFig, iTrial);
         end
+        if isvalid_(get_(S_fig, 'hTraj')) % update the trajectory if turned on
+            draw_traj_trial_(hFig, iTrial);
+        end
     case 'g'
         vcTrial = inputdlg('Trial ID: ');
         if isempty(vcTrial), return; end
@@ -1566,9 +1673,50 @@ switch lower(event.Key)
             return; 
         end        
         plotShapes_trial_(hFig, iTrial);
+        if isvalid_(get_(S_fig, 'hTraj')) % update the trajectory if turned on
+            draw_traj_trial_(hFig, iTrial);
+        end
     case 'e'
         S_trial = S_fig.cS_trial{S_fig.iTrial};
         trial2csv_(S_trial);
+    case 't' % draw trajectory
+        if isvalid_(get_(S_fig, 'hTraj'))
+            delete_plot_(hFig, 'hTraj');
+        else
+            draw_traj_trial_(hFig, S_fig.iTrial);
+        end        
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function S_fig = delete_plot_(hFig, vcTag)
+S_fig = hFig.UserData;
+if isempty(S_fig), return; end
+delete_(get_(S_fig, vcTag));
+S_fig.(vcTag) = [];
+hFig.UserData = S_fig;
+end %func
+
+
+%--------------------------------------------------------------------------
+function [S_fig, hPlot] = draw_traj_trial_(hFig, iTrial)
+S_fig = hFig.UserData;
+S_ = S_fig.cS_trial{iTrial};
+P = get_set_(S_fig, 'P', load_cfg_());
+nSkip_img = get_set_(P, 'nSkip_img', 2);
+
+try
+    [X,Y] = deal(S_.XC(:,2)/nSkip_img, S_.YC(:,2)/nSkip_img);
+    hPlot = get_(S_fig, 'hTraj');
+    if isvalid_(hPlot)
+        [hPlot.XData, hPlot.YData] = deal(X, Y);    
+    else
+        S_fig.hTraj = plot(S_fig.hAxes, X, Y, 'b');
+        hFig.UserData = S_fig;
+    end
+catch
+    ; % pass
 end
 end %func
 
@@ -1610,7 +1758,8 @@ for iShape=1:numel(csShapes)
     uimenu(c, 'Label', csShapes{iShape}, 'Callback',@setTable_);
 end
 uimenu(c, 'Label', '--------');
-uimenu(c, 'Label', 'Rotate', 'Callback',@setTable_);
+uimenu(c, 'Label', 'Rotate CW', 'Callback',@setTable_);
+uimenu(c, 'Label', 'Rotate CCW', 'Callback',@setTable_);
 uimenu(c, 'Label', 'Delete', 'Callback',@setTable_);
 
     function setTable_(source,callbackdata)   
@@ -1619,9 +1768,10 @@ uimenu(c, 'Label', 'Delete', 'Callback',@setTable_);
         xy_grid = round(xy_cm / P1.cm_per_grid); 
         iRow_nearest = findNearest_grid_(xy_grid, tbl.Data, 1);
         switch lower(source.Label)
-            case 'rotate'                
+            case {'rotate cw', 'rotate ccw'}                
                 if isempty(iRow_nearest), return; end
-                tbl.Data(iRow_nearest,3) = mod(tbl.Data(iRow_nearest,3)+90,360);
+                dAng = ifeq_(strcmpi(source.Label, 'rotate cw'), 90, -90);
+                tbl.Data(iRow_nearest,3) = mod(tbl.Data(iRow_nearest,3)+dAng,360);
             case 'delete'
                 if isempty(iRow_nearest), return; end
                 tbl.Data(iRow_nearest,:) = nan; %delete
@@ -1716,6 +1866,16 @@ if numel(xya)==3
 else
     ang = 0;
 end
+
+mrXY_cm = get_polygon_(vcShape, xy_, dimm, ang);
+mrXY_pix = cm2pix_(mrXY_cm, P1);
+h = plot(hImg.Parent, mrXY_pix(:,1), mrXY_pix(:,2), 'g-', 'LineWidth', 1);
+end %func
+
+
+%--------------------------------------------------------------------------
+function [mrXY_cm, fCircle] = get_polygon_(vcShape, xy_, dimm, ang)
+fCircle = 0;
 switch upper(vcShape)
     case 'TRIANGLE' % length is given
         r_ = dimm(1)/sqrt(3);
@@ -1723,13 +1883,13 @@ switch upper(vcShape)
     case {'CIRCLE', 'FOOD'} % diameter is given
         r_ = dimm(1)/2;
         vrA_ = [0:9:360]; 
+        fCircle = 1;
     case {'SQUARE', 'RECT', 'RECTANGLE'} % length is given
         r_ = dimm(1);
         vrA_ = [45:90:360+45];
     otherwise, error(['draw_shapes_img_: invalid shape: ', vcShape]);
 end %switch
-mrXY_pix = cm2pix_(bsxfun(@plus, xy_(:)', rotate_line_(vrA_ + ang, r_)), P1);
-h = plot(hImg.Parent, mrXY_pix(:,1), mrXY_pix(:,2), 'g-', 'LineWidth', 1);
+mrXY_cm = bsxfun(@plus, xy_(:)', rotate_line_(vrA_ + ang, r_));
 end %func
 
 
@@ -2034,7 +2194,7 @@ end %func
 
 %--------------------------------------------------------------------------
 function trialset_exportcsv_(vcFile_trialset)
-
+h = msgbox_('Exporting the trialset to csv files (This closes automatically)');
 % S_trialset = load_trialset_(vcFile_trialset);
 [cS_trial, S_trialset, trImg0] = loadShapes_trialset_(vcFile_trialset);
 % csFiles_track = S_trialset.csFiles_Track;
@@ -2051,6 +2211,7 @@ for iFile = 1:numel(cS_trial)
     end
 end %for
 disp_cs_(csFormat);
+close_(h);
 end %func
 
 

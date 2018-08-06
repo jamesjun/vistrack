@@ -1,6 +1,17 @@
 Visual Tracker (vistrack) change log
   James Jun, Flatiron Institute
 
+[v0.3.1, 8/6/2018]
+"CSV export" feature now includes "_relations.csv" file that exports following info
+  Frame capture time (s)
+  distance to food (m)
+  Heading angle error (0..90 deg)
+  Proximity to each shape (boolean, controlled by "dist_cm_shapes" in defatul.cfg).
+New features in "Input Coordinates" tool
+  Counterclockwise rotation is added to the mouse right-click menu.
+  Enhanced image contrast.
+  Plot trajectory key is added (press "T" to toggle on/off).
+
 [v0.3.0, 8/2/2018]
 Fixed csv export error. Orientation is correctly saved (previously divided by 20)
 Added a shortcut for "Input coordinates" figure: "[E]xport CSV" to export individual trial.
