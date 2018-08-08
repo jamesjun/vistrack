@@ -33,6 +33,7 @@ switch lower(vcCmd)
     case 'dependencies', disp_dependencies_();
     case 'download-sample', download_sample_();
     case 'load-cfg', varargout{1} = load_cfg_();
+    case 'clear-cache', clear_cache_();
         
     case 'trial-visitcount', trial_timemap_(vcArg1);
     case 'trial-fixsync', varargout{1} = trial_fixsync_(vcArg1);
@@ -45,7 +46,8 @@ switch lower(vcCmd)
     case 'trialset-exportcsv', trialset_exportcsv_(vcArg1);
     case 'trialset-checkfps', trialset_checkfps_(vcArg1);
     case 'trialset-coordinates', trialset_coordinates_(vcArg1);
-
+    case 'trialset-fixfps', trialset_fixfps_(vcArg1);
+        
     otherwise, help_();
 end %switch
 if fReturn, return; end
@@ -178,8 +180,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.3.1';
-vcDate = '8/6/2018';
+vcVer = 'v0.3.2';
+vcDate = '8/7/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -307,7 +309,7 @@ end %func
 
 %--------------------------------------------------------------------------
 % 9/26/17 JJJ: Created and tested
-function flag = exist_file_(vcFile)
+function flag = exist_file_(vcFile, fVerbose)
 if nargin<2, fVerbose = 0; end
 if ~ischar(vcFile), flag = 0; return; end
 if isempty(vcFile)
@@ -523,12 +525,18 @@ end %func
 
 
 %--------------------------------------------------------------------------
-% 11/5/17 JJJ: Created
+% 8/7/2018 JJJ
 function flag = exist_dir_(vcDir)
 if isempty(vcDir)
     flag = 0;
 else
-    flag = exist(vcDir, 'dir') == 7;
+    S_dir = dir(vcDir);
+    if isempty(S_dir)
+        flag = 0;
+    else
+        flag = sum([S_dir.isdir]) > 0;
+    end
+%     flag = exist(vcDir, 'dir') == 7;
 end
 end %func
 
@@ -917,6 +925,9 @@ if nargout==0
     hFig = plot_trialset_img_(S_trialset, trFps); 
     set(hFig, 'Name', sprintf('FPS: %s', vcFile_trialset));
 end
+
+% open a FPS fix tool 
+
 end %func
 
 
@@ -986,8 +997,9 @@ assignWorkspace_(handles);
 [vcFile_cvs, mrTraj, vcMsg_cvs, csFormat] = trial2csv_(handles, [], 0);
 assignWorkspace_(mrTraj);
 P = load_cfg_();
-msgbox_({'"handles" struct and "mrTraj" assigned to the Workspace.', 
-    vcMsg_cvs, csFormat{:}});
+csMsg = {'"handles" struct and "mrTraj" assigned to the Workspace.', vcMsg_cvs};
+csMsg = [csMsg, csFormat(:)'];
+msgbox_(csMsg);
 end %func
 
 
@@ -1588,10 +1600,10 @@ delete_(get_(S_fig, 'hGrid'));
 hGrid = draw_grid_(hImage, -10:5:10);
 
 % Title
-vcTitle = [dataID_, '  [H]elp, [T]rajectory, [L/R]:Next/Prev, [G]oto, [E]xport ...'];
+vcTitle = [dataID_, '  [H]elp, [T]rajectory, [L/R/PgDn/PgUp]:Next/Prev, [G]oto, [E]xport ...'];
 hTitle = get_(S_fig, 'hTitle');
 if isempty(hTitle)
-    hTitle = title(hAxes, vcTitle);
+    hTitle = title_(hAxes, vcTitle);
 else
     hTitle.String = vcTitle;
 end
@@ -1638,14 +1650,15 @@ switch lower(event.Key)
     case 'h'
         msgbox(...
             {'[H]elp', 
-            '(Shift)+[L/R]: next trial (Shift: quick jump)', 
+            '(Shift)+[L/R/PgDn/PgUp]: next trial (Shift: quick jump)', 
             '[G]oto trial', 
             '[Home]: First trial', 
             '[END]: Last trial', 
             '[E]xport coordinates to csv'
             '[T]rajectory toggle'}, ...
                 'Shortcuts');        
-    case {'leftarrow', 'rightarrow', 'home', 'end'}
+            
+    case {'leftarrow', 'rightarrow', 'home', 'end', 'pagedown', 'pageup'}
         % move to different trials and draw
         iTrial_prev = S_fig.iTrial;
         if strcmpi(event.Key, 'home')
@@ -1656,6 +1669,10 @@ switch lower(event.Key)
             iTrial = max(S_fig.iTrial - nStep, 1);
         elseif strcmpi(event.Key, 'rightarrow')
             iTrial = min(S_fig.iTrial + nStep, nTrials);
+        elseif strcmpi(event.Key, 'pageup')
+            iTrial = max(S_fig.iTrial - nStep*4, 1);
+        elseif strcmpi(event.Key, 'pagedown')            
+            iTrial = min(S_fig.iTrial + nStep*4, nTrials);            
         end
         if iTrial ~= iTrial_prev
             plotShapes_trial_(hFig, iTrial);
@@ -1663,6 +1680,7 @@ switch lower(event.Key)
         if isvalid_(get_(S_fig, 'hTraj')) % update the trajectory if turned on
             draw_traj_trial_(hFig, iTrial);
         end
+        
     case 'g'
         vcTrial = inputdlg('Trial ID: ');
         if isempty(vcTrial), return; end
@@ -1676,15 +1694,20 @@ switch lower(event.Key)
         if isvalid_(get_(S_fig, 'hTraj')) % update the trajectory if turned on
             draw_traj_trial_(hFig, iTrial);
         end
+        
     case 'e'
         S_trial = S_fig.cS_trial{S_fig.iTrial};
         trial2csv_(S_trial);
+        
     case 't' % draw trajectory
         if isvalid_(get_(S_fig, 'hTraj'))
             delete_plot_(hFig, 'hTraj');
         else
             draw_traj_trial_(hFig, S_fig.iTrial);
-        end        
+        end  
+        
+    otherwise
+        return;
 end
 end %func
 
@@ -2367,10 +2390,11 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function handles = trial_fixsync_(handles, fAsk)
+function handles = trial_fixsync1_(handles, fAsk)
 % Load video file from handle
 if nargin<2, fAsk = 1; end
 
+% Load video
 h=msgbox('Loading... (this will close automatically)');
 [vidobj, vcFile_vid] = load_vid_handle_(handles);
 if isempty(vidobj)
@@ -2378,6 +2402,7 @@ if isempty(vidobj)
     close_(h);
     return;
 end
+P = load_settings_(handles);
 
 % load video, load LED until end of the video
 try
@@ -2386,10 +2411,10 @@ catch
     nFrames_load = vidobj.NumberOfFrames;
 end
 [vrLed_cam, viT_cam] = loadLed_vid_(vidobj, [], nFrames_load);
-viT_cam = fill_missing_(viT_cam);
+[viT_cam, viiFilled_led] = fill_missing_(viT_cam);
 close_(h);
-handles.vidobj = vidobj;
 % figure; plot(vrLed); hold on; plot(viT_cam, vrLed(viT_cam), 'o'); 
+
 
 % get ADC timestamp
 vrT_adc = getSync_adc_(handles);
@@ -2401,7 +2426,6 @@ vtLed_cam = interp1(viT_cam, vrT_adc, (1:numel(vrLed_cam)), 'linear', 'extrap');
 [vrX, vrY, TC] = deal(handles.XC(:,2), handles.YC(:,2), handles.TC(:));
 vrTC_new = interp1(viT_cam, vrT_adc, (handles.FLIM(1):handles.FLIM(2))', 'linear', 'extrap');
 vrT_err = TC - vrTC_new;
-P = load_cfg_();
 vrV = sqrt((vrX(3:end)-vrX(1:end-2)).^2 + (vrY(3:end)-vrY(1:end-2)).^2) / P.pixpercm / 100;
 vrV_prev = vrV ./ (TC(3:end) - TC(1:end-2));
 vrV_new = vrV ./ (vrTC_new(3:end) - vrTC_new(1:end-2));
@@ -2425,19 +2449,114 @@ ylabel('Speed (m/s)'); xlabel('Time (s)');
 linkaxes(ax,'x');
 xlim(vrTC_new([1, end]));
 title(sprintf('Ave speed: %0.3f(old), %0.3f(new) m/s', mean(vrV_prev), mean(vrV_new)));
-% ylim([-.001, .001]); 
 
 fSave = 1; % save by default
 if fAsk
     csAns = questdlg('Save time sync?', vcFile_vid, ifeq_(std(vrT_err) > .01, 'Yes', 'No'));
     fSave = strcmpi(csAns, 'Yes');
-%     close_(hFig);
 end
 if fSave % save to file
     handles.TC = vrTC_new;
     handles.FPS = diff(handles.FLIM([1,end])) / diff(handles.TC([1,end]));
     trial_save_(handles);
 end
+end %func
+
+
+%--------------------------------------------------------------------------
+function hPlot = plot_vline_(hAx, vrX, ylim1, lineStyle)
+if nargin<4, lineStyle = []; end
+mrX = repmat(vrX(:)', [3,1]);
+mrY = nan(size(mrX));
+mrY(1,:) = ylim1(1);
+mrY(2,:) = ylim1(2);
+if isempty(lineStyle)
+    hPlot = plot(hAx, mrX(:), mrY(:));
+else
+    hPlot = plot(hAx, mrX(:), mrY(:), lineStyle);
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function keypress_FigSync_(hFig, event)
+S_fig = get(hFig, 'UserData');
+nStep = 1 + key_modifier_(event, 'shift')*3;
+nFrames = size(S_fig.mov, 3);
+switch lower(event.Key)
+    case 'h'
+        msgbox(...
+            {'[H]elp', 
+            '(Shift)+[L/R/PgUp/PgDn]: next trial (Shift: quick jump)', 
+            '[G]oto trial', 
+            '[Home]: First trial', 
+            '[END]: Last trial'
+            }, ...
+                'Shortcuts');     
+        return;
+        
+    case {'leftarrow', 'rightarrow', 'home', 'end', 'pagedown', 'pageup'}
+        % move to different trials and draw
+        iFrame_prev = S_fig.iFrame;
+        if strcmpi(event.Key, 'home')
+            iFrame = 1;
+        elseif strcmpi(event.Key, 'end')
+            iFrame = nFrames;
+        elseif strcmpi(event.Key, 'leftarrow')            
+            iFrame = max(S_fig.iFrame - nStep, 1);
+        elseif strcmpi(event.Key, 'rightarrow')
+            iFrame = min(S_fig.iFrame + nStep, nFrames);
+        elseif strcmpi(event.Key, 'pageup')
+            iFrame = max(S_fig.iFrame - nStep*4, 1);                        
+        elseif strcmpi(event.Key, 'pagedown')            
+            iFrame = min(S_fig.iFrame + nStep*4, nFrames);
+        end
+        if iFrame ~= iFrame_prev
+            refresh_FigSync_(hFig, iFrame);
+        end
+        
+    case 'g'
+        vcFrame = inputdlg('Frame#: ');
+        if isempty(vcFrame), return; end
+        iFrame = str2num(vcFrame);
+        if isempty(iFrame) || isnan(iFrame)
+            msgbox(['Invalid Frame#: ', vcFrame]);
+            return; 
+        end        
+        refresh_FigSync_(hFig, iFrame);
+        
+    otherwise
+        return;
+end %switch
+end %func
+
+
+%--------------------------------------------------------------------------
+function [vtText, csText] = getText_adc_(handles, P)
+if nargin<2, P=[]; end
+if isempty(P), P = load_settings_(handles); end
+
+ADCTC = get_(handles, 'ADCTS');
+if isempty(ADCTC), vtText = []; return; end
+ADC_CH_TEXT = get_set_(P, 'ADC_CH_TEXT', 30);
+S_text = getfield(ADCTC, sprintf('%s_Ch%d', getSpike2Prefix(ADCTC), ADC_CH_TEXT));
+[vtText, vcText_] = struct_get_(S_text, 'times', 'text');
+csText = cellstr(vcText_);
+end %func
+
+
+%--------------------------------------------------------------------------
+function [vtEodr, vrEodr] = getEodr_adc_(handles, P)
+if nargin<2, P=[]; end
+if isempty(P), P = load_settings_(handles); end
+
+ADCTC = get_(handles, 'ADCTS');
+if isempty(ADCTC), vtText = []; return; end
+ADC_CH_EOD = get_set_(P, 'ADC_CH_EOD', 10);
+S_eod = getfield(ADCTC, sprintf('%s_Ch%d', getSpike2Prefix(ADCTC), ADC_CH_EOD));
+vtEod = S_eod.times;
+vrEodr = 2 ./ (vtEod(3:end) - vtEod(1:end-2));
+vtEodr = vtEod(2:end-1);
 end %func
 
 
@@ -2484,26 +2603,33 @@ fprintf('LED loading took %0.1fs\n', toc(t1));
 end %func
 
 
-
 %--------------------------------------------------------------------------
 % Fill missing LED pulses
-function viT_new = fill_missing_(viT_cam, frac)
+function [viT_new, viT_missing] = fill_missing_(viT_cam, frac)
 if nargin<2, frac = []; end
 if isempty(frac), frac = .2; end % 20% variation is tolerated
 
 % vlPulse = false(1, numel(viT_cam));
 % vlPulse(viT_cam) = 1;
-vrTd = diff(viT_cam);
-tInt_med = median(vrTd);
-viMissing = find(vrTd > median(vrTd) * (1+frac));
-if ~isempty(viMissing)
-    viT_missing = round((viT_cam(viMissing) + viT_cam(viMissing+1))/2);
-    viT_new = sort([viT_cam(:); viT_missing(:)]); 
-else
+viT_ = [0; viT_cam(:)];
+vrTd = diff(viT_);
+vnInsert_missing = round(vrTd / median(vrTd)) - 1;
+viMissing = find(vnInsert_missing > 0);
+if isempty(viMissing)
+    viT_new = viT_cam;
     viT_missing = [];
-    viT_new = viT_cam;    
+else
+    cviT_missing = cell(1, numel(viMissing));
+    for iMissing1 = 1:numel(viMissing)
+        iMissing = viMissing(iMissing1);
+        n_ = vnInsert_missing(iMissing);
+        vi_ = linspace(viT_(iMissing), viT_(iMissing+1), n_+2);
+        cviT_missing{iMissing1} = vi_(2:end-1);
+    end
+    viT_missing = round(cell2mat(cviT_missing));
+    viT_new = sort([viT_cam(:); viT_missing(:)]); 
 end
-fprintf('%d pulses inserted (before: %d, after: %d)\n', numel(viMissing), numel(viT_cam), numel(viT_new));
+fprintf('%d pulses inserted (before: %d, after: %d)\n', numel(viT_missing), numel(viT_cam), numel(viT_new));
 if nargout==0    
     figure; hold on; grid on;
     plot(viT_cam, ones(size(viT_cam)), 'bo');
@@ -2523,9 +2649,9 @@ function vrT_adc = getSync_adc_(handles, P)
 if nargin<2, P=[]; end
 if isempty(P), P = load_settings_(handles); end
 
-ADCTC = get_(handles, 'ADCTS');
-if isempty(ADCTC), vrT_adc = []; return; end
-S_adc = getfield(ADCTC, sprintf('%s_Ch%d', getSpike2Prefix(ADCTC), P.ADC_CH_TCAM));
+ADCTS = get_(handles, 'ADCTS');
+if isempty(ADCTS), vrT_adc = []; return; end
+S_adc = getfield(ADCTS, sprintf('%s_Ch%d', getSpike2Prefix(ADCTS), P.ADC_CH_TCAM));
 vrT_adc = get_(S_adc, 'times');
 end %func
 
@@ -2551,7 +2677,7 @@ vidobj = get_(handles, 'vidobj');
 if isempty(vidobj)
     vidobj = VideoReader_(vcFile_vid);
 end
-end
+end %func
 
 
 %--------------------------------------------------------------------------
@@ -2570,7 +2696,12 @@ end % func
 
 
 %--------------------------------------------------------------------------
-function xyLed = findLed_mov_(trImg)
+function xyLed = findLed_mov_(trImg, nFrames_led)
+if nargin<2, nFrames_led = []; end
+if ~isempty(nFrames_led)
+    nFrames_led = min(size(trImg,3), nFrames_led);
+    trImg = trImg(:,:,1:nFrames_led);
+end
 img_pp = (max(trImg,[],3) - min(trImg,[],3));
 [~,imax_pp] = max(img_pp(:));
 [yLed, xLed] = ind2sub(size(img_pp), imax_pp);
@@ -2580,7 +2711,7 @@ end %func
 
 %--------------------------------------------------------------------------
 % 7/30/2018 JJJ: Moved from GUI.m
-function vcFile_mat = trial_save_(handles)
+function vcFile_Track = trial_save_(handles)
 
 handles.ESAC = calcESAC(handles);
 
@@ -2588,21 +2719,25 @@ handles.ESAC = calcESAC(handles);
 S_cfg = vistrack('load-cfg');
 S_save = struct_copy_(handles, S_cfg.csFields);
 
-if exist_file_(handles.vidFname)
-    vcFile_mat = subsFileExt_(handles.vidFname, '_Track.mat');
+if isfield(handles, 'vcFile_Track')
+    vcFile_Track = handles.vcFile_Track;
+elseif exist_file_(handles.vidFname)
+    vcFile_Track = subsFileExt_(handles.vidFname, '_Track.mat');
 else
-    vcFile_mat = get(handles.editResultFile, 'String');
+    vcFile_Track = get(handles.editResultFile, 'String');
 end
-set(handles.editResultFile, 'String', vcFile_mat);    
 
 h = msgbox('Saving... (this will close automatically)');    
 try
-    struct_save_(S_save, vcFile_mat, 0);
-%     eval(sprintf('save(''%s'', ''-struct'', ''S_save'');', vcFile_mat));
-    set(handles.editResultFile, 'String', vcFile_mat);    
-    msgbox_(sprintf('Output saved to %s', fullpath_(vcFile_mat)));   
+    struct_save_(S_save, vcFile_Track, 0);
+    if isfield(handles, 'editResultFile')
+        set(handles.editResultFile, 'String', vcFile_Track);
+        msgbox_(sprintf('Output saved to %s', fullpath_(vcFile_Track)));   
+    else
+        fprintf('Output saved to %s\n', fullpath_(vcFile_Track)); % batch mode
+    end
 catch
-    fprintf(2, 'Save file failed: %s\n', vcFile_mat);
+    fprintf(2, 'Save file failed: %s\n', vcFile_Track);
 end
 close_(h);
 end %func
@@ -2669,3 +2804,436 @@ end
 end %func
 
 
+%--------------------------------------------------------------------------
+function handles = trial_fixsync_(handles, fPlot)
+persistent mov
+
+if nargin==0, mov = []; return; end % clear cache
+if nargin<2, fPlot = 1; end
+
+P = load_settings_(handles);
+vtLed_adc = getSync_adc_(handles, P);
+
+if isempty(mov)
+    vcFile_vid = handles.vidFname;
+    if ~exist_file_(vcFile_vid)
+        vcFile_vid = strrep(get_(handles, 'vcFile_Track'), '_Track.mat', '.wmv');
+    end
+    h = msgbox_('Loading video... (this closes automatically)');
+    [mov, dimm_vid] = loadvid_(vcFile_vid, 4);
+    close_(h);
+else
+    fprintf('Using cached video.\n');
+end
+
+% Find LED timing
+xyLed = findLed_mov_(mov, 300);
+vrLed = mov2led_(mov, xyLed);
+vrLed = vrLed - medfilt1(vrLed,5);
+thresh_led = max(vrLed) * .2;
+viLed_cam = find(diff(vrLed > thresh_led)>0) + 1;
+[viLed_cam, viiLed_filled] = fill_missing_(viLed_cam);
+S_sync = struct('vrT_adc', vtLed_adc, 'viT_cam', viLed_cam);
+[tlim_adc, flim_cam] = sync_limit_(vtLed_adc, viLed_cam);
+TC = cam2adc_sync_(S_sync, handles.FLIM(1):handles.FLIM(2));
+
+% save if not plotting
+if fPlot == 0
+    handles.TC = TC;
+    handles.FPS = diff(handles.FLIM([1,end])) / diff(handles.TC([1,end]));
+    trial_save_(handles);
+    return;
+end
+
+[vtText, csText] = getText_adc_(handles, P);
+xoff_ = 50;
+csPopup = {'First frame', csText{:}, 'Last frame'};
+hFig = figure_new_('FigSync', [handles.vidFname, ' press "h" for help'], [0,0,.5,1]);
+hFig.KeyPressFcn = @keypress_FigSync_;
+hPopup = uicontrol('Style', 'popup', 'String', csPopup, ...
+    'Position', [xoff_ 0 200 50], 'Callback', @popup_sync_);
+hPopup.KeyPressFcn = @(h,e)keypress_FigSync_(hFig,e); 
+
+% Create axes
+iFrame = 1;
+hAxes1 = axes(hFig, 'Units', 'pixels', 'Position', [xoff_,60,800,600]);
+hImage = imshow(mov(:,:,iFrame), 'Parent', hAxes1);
+hold(hAxes1, 'on');
+hTitle = title_(hAxes1, sprintf('Frame %d', iFrame));
+
+% Create Line plot
+tFrame_adc = cam2adc_sync_(S_sync, iFrame);
+hAxes2 = axes(hFig, 'Units', 'pixels', 'Position', [xoff_,750,800,50]);
+hold(hAxes2, 'on');
+plot_vline_(hAxes2, vtLed_adc, [0,1], 'k'); 
+plot_vline_(hAxes2, vtText, [0,1], 'm'); 
+hLine_cam = plot_vline_(hAxes2, cam2adc_sync_(S_sync, viLed_cam), [0,1], 'r--'); 
+set(hAxes2, 'XTick', vtLed_adc);
+xlabel('ADC Time (s)');
+set(hAxes2, 'XLim', tlim_adc);
+hCursor_adc = plot(hAxes2, tFrame_adc, .5, 'ro');
+
+% Create Line plot
+hAxes3 = axes(hFig, 'Units', 'pixels', 'Position', [xoff_,850,800,50]);
+hold(hAxes3, 'on');
+hPlot3 = plot_vline_(hAxes3, viLed_cam, [0,1], 'r--');
+xlabel('Camera Frame #');
+set(hAxes3, 'XLim', flim_cam);
+set(hAxes3, 'XTick', viLed_cam);
+hCursor_cam = plot(hAxes3, iFrame, .5, 'ro');
+
+% Show EOD plot
+hAxes4 = axes(hFig, 'Units', 'pixels', 'Position', [xoff_,950,800,100]);
+hold(hAxes4, 'on');
+xlabel('ADC Time (s)');
+ylabel('EOD Rate (Hz)');
+[vtEodr, vrEodr] = getEodr_adc_(handles, P);
+hPlot_eod = plot(hAxes4, vtEodr, vrEodr, 'k');
+hCursor_eod = plot(hAxes4, tFrame_adc, median(vrEodr), 'ro');
+set(hAxes4, 'XLim', tlim_adc, 'YLim', median(vrEodr) * [1/2, 2]);
+
+hFig.UserData = makeStruct_(iFrame, mov, hImage, vtText, csText, hTitle, ...
+    S_sync, hCursor_adc, hCursor_cam, hPopup, hPlot_eod, hCursor_eod);
+
+% close the figure after done
+uiwait(msgbox('Press OK when finished.'));
+try S_fig = hFig.UserData; catch, msgbox('Figure is already closed by user.'); return ;end
+close_(hFig);
+
+% Ask user to save
+csAns = questdlg(sprintf('Save time sync? (mean error: %0.3fs, %d pulses added)', ...
+    std(TC-handles.TC), numel(viiLed_filled)));
+fSave = strcmpi(csAns, 'Yes');
+if fSave % save to file
+    [S_sync] = struct_get_(S_fig, 'S_sync');
+    TC = cam2adc_sync_(S_sync, handles.FLIM(1):handles.FLIM(2));    
+    handles.TC = TC;
+    handles.FPS = diff(handles.FLIM([1,end])) / diff(handles.TC([1,end]));
+    trial_save_(handles);
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function vrT1_adc = cam2adc_sync_(S_sync, viT1_cam)
+[vrT_adc, viT_cam] = struct_get_(S_sync, 'vrT_adc', 'viT_cam');
+nBlinks = min(numel(viT_cam), numel(vrT_adc));
+[viT_cam, vrT_adc] = deal(viT_cam(end-nBlinks+1:end), vrT_adc(1:nBlinks));
+vrT1_adc = interp1(viT_cam, vrT_adc, viT1_cam, 'linear', 'extrap');
+end %func
+
+
+%--------------------------------------------------------------------------
+function [tlim_adc, flim_cam] = sync_limit_(vtLed_adc, viLed_cam)
+nBlinks = min(numel(vtLed_adc), numel(viLed_cam));
+tlim_adc = vtLed_adc([1, nBlinks]);
+flim_cam = viLed_cam([end-nBlinks+1, end]);
+end %func
+
+
+%--------------------------------------------------------------------------
+function viT1_cam = adc2cam_sync_(S_sync, vrT1_adc)
+[vrT_adc, viT_cam] = struct_get_(S_sync, 'vrT_adc', 'viT_cam');
+nBlinks = min(numel(viT_cam), numel(vrT_adc));
+[viT_cam, vrT_adc] = deal(viT_cam(1:nBlinks), vrT_adc(1:nBlinks));
+viT1_cam = round(interp1(vrT_adc, viT_cam, vrT1_adc, 'linear', 'extrap'));
+end %func
+
+
+%--------------------------------------------------------------------------
+function vc = popup_sync_(h,e)
+hFig = h.Parent;
+S_fig = hFig.UserData;
+vcLabel = h.String{h.Value};
+[iFrame_prev, mov, S_sync, hTitle, hImage] = ...
+    struct_get_(S_fig, 'iFrame', 'mov', 'S_sync', 'hTitle', 'hImage');
+nFrames = size(mov,3);
+switch lower(vcLabel)
+    case 'first frame'
+        iFrame = 1;
+    case 'last frame'
+        iFrame = nFrames; 
+    otherwise
+        t_adc = S_fig.vtText(h.Value-1);
+        iFrame = setlim_(adc2cam_sync_(S_sync, t_adc), [1, nFrames]);
+end
+if iFrame_prev==iFrame, return ;end
+
+refresh_FigSync_(hFig, iFrame);
+end %func
+
+
+%--------------------------------------------------------------------------
+function refresh_FigSync_(hFig, iFrame)
+S_fig = hFig.UserData;
+[iFrame_prev, mov, S_sync, hTitle, hImage] = ...
+    struct_get_(S_fig, 'iFrame', 'mov', 'S_sync', 'hTitle', 'hImage');
+hImage.CData = mov(:,:,iFrame);
+set(S_fig.hCursor_cam, 'XData', iFrame);
+tFrame_adc = cam2adc_sync_(S_sync, iFrame);
+set(S_fig.hCursor_adc, 'XData', tFrame_adc);
+set(S_fig.hCursor_eod, 'XData', tFrame_adc);
+
+% Update title
+viText_cam = adc2cam_sync_(S_sync, S_fig.vtText);
+viMatch = find(viText_cam==iFrame);
+if isempty(viMatch)
+    hTitle.String = sprintf('Frame %d', iFrame);
+else
+    iMatch = viMatch(1);
+    hTitle.String = sprintf('Frame %d: %s', iFrame, S_fig.csText{iMatch});
+    S_fig.hPopup.Value = iMatch+1;
+end
+
+% update current frame
+S_fig.iFrame = iFrame;
+hFig.UserData = S_fig;
+end %func
+
+
+%--------------------------------------------------------------------------
+function vr = setlim_(vr, lim_)
+% Set low and high limits
+vr = min(max(vr, lim_(1)), lim_(2));
+end %func
+
+
+%--------------------------------------------------------------------------
+function hTitle = title_(hAx, vc)
+% title_(vc)
+% title_(hAx, vc)
+
+if nargin==1, vc=hAx; hAx=[]; end
+% Set figure title
+
+if isempty(hAx), hAx = gca; end
+hTitle = get_(hAx, 'Title');
+if isempty(hTitle)
+    hTitle = title(hAx, vc, 'Interpreter', 'none', 'FontWeight', 'normal');
+else
+    set_(hTitle, 'String', vc, 'Interpreter', 'none', 'FontWeight', 'normal');
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function vc = set_(vc, varargin)
+% Set handle to certain values
+% set_(S, name1, val1, name2, val2)
+
+if isempty(vc), return; end
+if isstruct(vc)
+    for i=1:2:numel(varargin)        
+        vc.(varargin{i}) = varargin{i+1};
+    end
+    return;
+end
+if iscell(vc)
+    for i=1:numel(vc)
+        try
+            set(vc{i}, varargin{:});
+        catch
+        end
+    end
+elseif numel(vc)>1
+    for i=1:numel(vc)
+        try
+            set(vc(i), varargin{:});
+        catch
+        end
+    end
+else
+    try
+        set(vc, varargin{:});
+    catch
+    end 
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function clear_cache_()
+trial_fixsync_();
+end %func
+
+
+%--------------------------------------------------------------------------
+function [mov, vcFile_bin] = loadvid_(vcFile_vid, nSkip, fSave_bin)
+% using the 2018a VideoReader
+% Extracts red channel only
+t1=tic;
+if nargin<2, nSkip = []; end
+if nargin<3, fSave_bin = 1; end
+if isempty(nSkip), nSkip = 1; end
+
+fFast = 0; %subsampling instead of averaging the pixels
+
+try
+    vidobj = VideoReader(vcFile_vid);
+catch
+    [dimm, mov] = deal([]);
+    return;
+end
+
+% vidInfo = mmfileinfo(vcFile_vid);
+% vidInfo.Duration;
+
+fprintf('Loading video: %s\n', vcFile_vid);
+
+vidHeight = floor(vidobj.Height / nSkip);
+vidWidth = floor(vidobj.Width / nSkip);
+
+% check cache
+vcFile_bin = sprintf('%s_mov%dx%d.bin', vcFile_vid, vidHeight, vidWidth);
+mov = loadvid_bin_(vcFile_bin);
+if ~isempty(mov)
+    dimm = size(mov); 
+    fprintf('\tLoaded from %s (%d frames), took %0.1fs\n', vcFile_bin, size(mov,3), toc(t1));
+    return; 
+end
+
+nFrames_est = round(vidobj.Duration * vidobj.FrameRate);
+mov = zeros(vidHeight, vidWidth, nFrames_est, 'uint8'); 
+fTrim = (vidHeight * nSkip) < vidobj.Height || (vidWidth * nSkip) < vidobj.Width;
+iFrame = 0;
+while hasFrame(vidobj)
+    iFrame = iFrame + 1;    
+    img_ = readFrame(vidobj);
+    if fFast
+        mov(:,:,iFrame) = img_(1:nSkip:vidHeight*nSkip, 1:nSkip:vidWidth*nSkip, 1);
+        continue;
+    end
+    img_ = img_(:,:,1); % red extraction
+    if nSkip>1
+        if fTrim
+            img_ = img_(1:(vidHeight*nSkip), 1:(vidWidth*nSkip));
+        end
+        img_ = sum(uint16(reshape(img_, nSkip, [])));
+        img_ = sum(permute(reshape(img_, vidHeight, nSkip, vidWidth), [2,1,3]));
+        img_ = reshape(uint8(img_/(nSkip^2)), vidHeight, vidWidth);
+    end
+    mov(:,:,iFrame) = img_;
+end
+nFrames = iFrame;
+dimm = [vidHeight, vidWidth, nFrames];
+if nFrames < nFrames_est
+    mov = mov(:,:,1:nFrames); %trim
+end
+
+% bulk save
+if fSave_bin
+    try 
+        fid_w = fopen(vcFile_bin, 'w');
+        fwrite(fid_w, mov, class(mov));
+        fclose(fid_w); 
+        fprintf('\twrote to %s (%d frames), took %0.1fs\n', vcFile_bin, size(mov,3), toc(t1));
+    catch
+        ;
+    end    
+else
+    fprintf('\tLoaded %d frames, took %0.1fs\n', size(mov,3), toc(t1));
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function mov = loadvid_bin_(vcFile_bin)
+% vcFile_bin: string format: vidfile_mov%dx%d.bin (wxh)
+
+mov=[]; 
+if ~exist_file_(vcFile_bin), return; end
+vcFormat = regexpi(vcFile_bin, '_mov(\d+)[x](\d+)[.]bin$', 'match');
+if isempty(vcFormat), return; end % invalid format
+
+try
+    vcFormat = strrep(strrep(vcFormat{1}, '_mov', ''), '.bin', '');
+    dimm = sscanf(vcFormat, '%dx%d');
+    [height, width] = deal(dimm(1), dimm(2));
+    nBytes_file = filesize_(vcFile_bin);
+    dimm(3) = floor(nBytes_file/height/width);
+    
+    fid = fopen(vcFile_bin, 'r');
+    mov = fread_(fid, dimm, 'uint8');
+    fclose(fid);
+catch
+    return;
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function mnWav1 = fread_(fid_bin, dimm_wav, vcDataType)
+% Get around fread bug (matlab) where built-in fread resize doesn't work
+dimm_wav = dimm_wav(:)';
+try
+    if isempty(dimm_wav)
+        mnWav1 = fread(fid_bin, inf, ['*', vcDataType]);
+    else
+        if numel(dimm_wav)==1, dimm_wav = [dimm_wav, 1]; end
+        mnWav1 = fread(fid_bin, prod(dimm_wav), ['*', vcDataType]);
+        if numel(mnWav1) == prod(dimm_wav)
+            mnWav1 = reshape(mnWav1, dimm_wav);
+        else
+            dimm2 = floor(numel(mnWav1) / dimm_wav(1));
+            if dimm2 >= 1
+                mnWav1 = reshape(mnWav1, dimm_wav(1), dimm2);
+            else
+                mnWav1 = [];
+            end
+        end
+    end
+catch
+    disperr_();
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+% Return [] if multiple files are found
+function nBytes = filesize_(vcFile)
+S_dir = dir(vcFile);
+if numel(S_dir) ~= 1
+    nBytes = []; 
+else
+    nBytes = S_dir(1).bytes;
+end
+end %func
+
+
+
+%--------------------------------------------------------------------------
+function [S_trialset, trFps] = trialset_fixfps_(vcFile_trialset)
+% It loads the files
+% iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
+% run S141106_LearningCurve_Control.m first cell
+fFix_sync = 1;
+
+S_trialset = load_trialset_(vcFile_trialset);
+% [pixpercm, angXaxis] = struct_get_(S_trialset.P, 'pixpercm', 'angXaxis');
+[tiImg, vcType_uniq, vcAnimal_uniq, viImg, csFiles_Track] = ...
+    struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'viImg', 'csFiles_Track');
+
+hMsg = msgbox('Analyzing... (This closes automatically)');
+t1=tic;
+trFps = nan(size(tiImg));
+for iTrial = 1:numel(viImg)    
+    try
+        clear_cache_();
+        S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'xy0', 'vidFname', 'FPS', 'img0', 'ADCTS', 'FLIM');         
+        S_.vcFile_Track = csFiles_Track{iTrial};
+        if fFix_sync, S_ = trial_fixsync_(S_, 0); end
+        iImg_ = viImg(iTrial);        
+        trFps(iImg_) = get_set_(S_, 'FPS', nan);     
+        fprintf('\n');
+    catch
+        disp(csFiles_Track{iTrial});
+    end
+end %for
+fprintf('\n\ttook %0.1fs\n', toc(t1));
+close_(hMsg);
+
+if nargout==0
+    hFig = plot_trialset_img_(S_trialset, trFps); 
+    set(hFig, 'Name', sprintf('FPS: %s', vcFile_trialset));
+end
+end %func

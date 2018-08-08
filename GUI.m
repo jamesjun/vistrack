@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 30-Jul-2018 15:14:54
+% Last Modified by GUIDE v2.5 07-Aug-2018 19:12:05
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -949,6 +949,7 @@ try
     set(handles.editSettings, 'String', S.csSettings);
     S_cfg = vistrack('load-cfg');
     handles = struct_merge_(handles, S, S_cfg.csFields);
+    handles.vcFile_Track = resultFile;
 
     set(handles.edit1, 'String', handles.vidFname);
     set(handles.editADCfile, 'String', [handles.vidFname(1:end-4), '_Rs.mat']);
@@ -962,6 +963,7 @@ try
     set(handles.panelPlot, 'Visible', 'on'); 
 
     guidata(hObject, handles);
+    clear_cache_();
     msgbox('Tracking Result loaded');
 catch
     set(handles.editResultFile, 'String', '');
@@ -1276,11 +1278,12 @@ function btnTrialsetCoordinates_Callback(hObject, eventdata, handles)
 vistrack('trialset-coordinates', get_str_(handles.editTrialSet));
 
 
-% --- Executes on button press in pushbutton69.
-function pushbutton69_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton69 (see GCBO)
+% --- Executes on button press in btnFixFps_trialset.
+function btnFixFps_trialset_Callback(hObject, eventdata, handles)
+% hObject    handle to btnFixFps_trialset (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+vistrack('trialset-fixfps', get_str_(handles.editTrialSet));
 
 
 % --- Executes on button press in pushbutton70.
@@ -1471,6 +1474,7 @@ end
 % 7/24/2018 JJJ: Clear persistent memories
 function clear_cache_()
 mov_flim_(); % clear cache;
+vistrack('clear-cache');
 
 
 %--------------------------------------------------------------------------

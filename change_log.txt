@@ -1,6 +1,14 @@
 Visual Tracker (vistrack) change log
   James Jun, Flatiron Institute
 
+[v0.3.2, 8/7/2018]
+"Fix sync" button 
+  Manual time sync validation tool is added.
+  Outputs uncompressed movie preview (_mov000x000.bin) for faster subsequent loading.
+Trialset "Fix sync" button
+  Automatically corrects all sync errors in the trialset.
+Bugfix: "List files" button
+
 [v0.3.1, 8/6/2018]
 "CSV export" feature now includes "_relations.csv" file that exports following info
   Frame capture time (s)
