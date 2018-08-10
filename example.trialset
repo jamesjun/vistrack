@@ -1,7 +1,8 @@
-
-vcDir = 'S:\JunSpatial_Simone\Shuffled\'; % or 'E:\2013b\C*' to select each folders starting with C
+vcDir = 'K:\Ottawa\2014b\*_S*'; % or 'E:\2013b\C*' to select each folders starting with C
 csAnimals = {'A','B','C','D'};
 csDir_excl = {};
 csFile_excl = {};
 viEarly_trial = 1:2;
 viLate_trial = 7:11;
+
+vcLink_googlesheet = 'https://docs.google.com/spreadsheets/d/1i7d-SDFZwW9eD1PaQQbMhK5kVMOGm3as80h2dbNeRXU/edit?usp=sharing';

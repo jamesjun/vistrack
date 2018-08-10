@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 07-Aug-2018 19:12:05
+% Last Modified by GUIDE v2.5 10-Aug-2018 11:32:52
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -254,7 +254,8 @@ try
     [FLIM, TC, img1, img00] = mov_flim_(handles.vidobj);
     [img00, MASK, xy_init, vec0, xy0] = makeBackground(img1, img00);
     try
-        TC = interp1(handles.FLIM0, handles.TLIM0, FLIM(1):FLIM(2), 'linear');
+        TC = vistrack('cam2adc-sync', handles.S_sync, FLIM(1):FLIM(2));
+%         TC = interp1(handles.FLIM0, handles.TLIM0, FLIM(1):FLIM(2), 'linear');
     catch
         ;
     end
@@ -319,9 +320,19 @@ function btnSync_Callback(hObject, eventdata, handles)
 % hObject    handle to btnSync (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+handles = vistrack('trial-sync', handles);
+% Update handles structure
+guidata(hObject, handles);
 
+
+% --- Executes on button press in btnSync.
+function btnSync_Callback1(hObject, eventdata, handles)
+
+% S_sync = calc_sync_(handles);
 LOADSETTINGS;
 vidobj = handles.vidobj;
+% mov1 = vistrack('loadvid-preview', handles.vidobj);
+
 try
     handles.xyLED = xyLED;
 catch
@@ -1296,8 +1307,8 @@ function pushbutton70_Callback(hObject, eventdata, handles)
 function [FLIM, TC, img1, img00] = mov_flim_(vidobj, nFrames_load)
 % mov_flim_(): clear cache
 
-persistent csAns1 csAns2 csAns3 mov1
-if nargin==0, [csAns1, csAns2, csAns3, mov1] = deal([]); return; end %clear cache
+persistent csAns1 csAns2 csAns3
+if nargin==0, [csAns1, csAns2, csAns3] = deal([]); return; end %clear cache
 
 if nargin<2, nFrames_load = 300; end % skip every 10 frames
 
@@ -1305,16 +1316,17 @@ if nargin<2, nFrames_load = 300; end % skip every 10 frames
 warning off;
 nFrames = vidobj.NumberOfFrames;
 % nFrames_skip = floor(nFrames / nFrames_load);
-TC = linspace(0, vidobj.Duration, nFrames);
+TC = linspace(0, vidobj.Duration, nFrames); % use sync function 
 % viF = 1:nFrames_skip:nFrames;
 viF = unique(round(linspace(1, nFrames, nFrames_load)));
 % viF = 1:nFrames_load; % much faster to load
-if isempty(mov1)
-    mov1 = mov_shrink_(read_(vidobj, viF), 2); 
-end
+% if isempty(mov1)
+mov1 = vistrack('loadvid-preview', vidobj);
+%     mov1 = mov_shrink_(read_(vidobj, viF), 2); 
+% end
 
 % rough scan
-implay(mov1);
+implay(mov1(:,:,viF));
 uiwait(msgbox('Find the first and last frame to track, and close the movie'));
 if isempty(csAns1), csAns1 = {'1', sprintf('%d', numel(viF))}; end
 csAns = inputdlg({'First frame', 'Last frame'}, 'Get frames', 1, csAns1);
@@ -1325,21 +1337,22 @@ fprintf('#1: First frame: %s; Last frame: %s\n', csAns{1}, csAns{2});
 
 % Find first frame to track
 viF_first = trim_(frame_first + (-150:149), 1, nFrames);
-tmr = read_(vidobj, viF_first);
-implay(mov_shrink_(tmr, 2));
+% tmr = read_(vidobj, viF_first);
+implay(mov1(:,:,viF_first));
+% implay(mov_shrink_(tmr, 2));
 uiwait(msgbox('Find the first frame to track and background, and close the movie'));
 if isempty(csAns2), csAns2 = {'1', num2str(numel(viF_first))}; end
 csAns = inputdlg({'First frame', 'Background frame'}, 'Get frames', 1, csAns2);
 csAns2 = csAns;
-img1 = tmr(:,:,str2num(csAns{1}));
-img00 = tmr(:,:,str2num(csAns{2}));
 frame_first = viF_first(str2num(csAns{1}));
+frame_background = viF_first(str2num(csAns{2}));
+img1 = read_(vidobj, frame_first);
+img00 = read_(vidobj, frame_background);
 fprintf('#2: First frame: %s; Background frame: %s\n', csAns{1}, csAns{2});
 
 % Find last frame to track
 viF_last = trim_(frame_last + (-150:149), 1, nFrames);
-tmr = read_(vidobj, viF_last);
-implay(mov_shrink_(tmr, 2));
+implay(mov1(:,:,viF_last));
 uiwait(msgbox('Find the last frame to track, and close the movie'));
 iFrame3 = ceil(numel(viF_last)/2);
 if isempty(csAns3), csAns3 = {num2str(iFrame3)}; end
@@ -1366,18 +1379,22 @@ function vi=trim_(vi, a, b)
 vi = vi(vi>=a & vi<=b);
 
 
-% --- Executes on button press in pushbutton73.
-function pushbutton73_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton73 (see GCBO)
+% --- Executes on button press in btnImport_Track.
+function btnImport_Track_Callback(hObject, eventdata, handles)
+% hObject    handle to btnImport_Track (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+vcFile_trialset = get(handles.editTrialSet, 'String');
+vistrack('trialset-import-track', vcFile_trialset);
 
 
-% --- Executes on button press in pushbutton74.
-function pushbutton74_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton74 (see GCBO)
+% --- Executes on button press in btnOpenSheet.
+function btnOpenSheet_Callback(hObject, eventdata, handles)
+% hObject    handle to btnOpenSheet (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+vcFile_trialset = get(handles.editTrialSet, 'String');
+vistrack('trialset-googlesheet', vcFile_trialset);
 
 
 % --- Executes on button press in btnSummary.

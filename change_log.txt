@@ -1,8 +1,23 @@
 Visual Tracker (vistrack) change log
   James Jun, Flatiron Institute
 
+[v0.3.3, 8/10/2018]
+"Check Sync" button
+  "Page Up/Down" button steps through the event markers.
+"Check Sync (all)" button 
+  Clicking the iamge cell displays the location of file and copies to the clipboard.
+"Sync timing" button
+  It applies the new time sync methods by using all the LED pulses (intead of using the first and last only).
+"Initialize" button
+  Faster video loading using the cached uncompressed video (_mov000x000.bin)
+"Import _Track" button
+  Copies _Track.mat files from one folder to each individual folder where the video file is located.
+"Export to CSV (all)" button
+  Data is resampled at 100 Hz after applying ADC-Camera time synchronization
+    (previously sampled at each camera frame capture time)
+
 [v0.3.2, 8/7/2018]
-"Fix sync" button 
+"Fix Sync" button 
   Manual time sync validation tool is added.
   Outputs uncompressed movie preview (_mov000x000.bin) for faster subsequent loading.
 Trialset "Fix sync" button
