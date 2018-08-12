@@ -1,6 +1,19 @@
 Visual Tracker (vistrack) change log
   James Jun, Flatiron Institute
 
+[v0.3.4, 8/12/2018]
+"Export to CSV (all)" and "Expport to CSV"
+  A_E (error angle: food vec-heading vec) now ranges from -90..90 deg (previously 0..90 deg)
+Bugfix: "Input coordinates"
+  [D]ensity keyboard shortcut added: plots the sampling density plot. 
+  [G]oto trial command now accepts a full file path as well as the trial ID.
+  Grid markers changed from '+' to '.' to permit right-clicking near the grid markers.
+  Closing the figure prompts the file saving dialog. Previously user had to press "OK" on the message box to save.
+Bugfix: trialset overview
+  Mouse click on the pixel now correctly copies the probe trial file location.
+"Check sync" button
+  "Shift" left/right jumps by 10 video frames and "Control" left/rigth jumps by 100 frames.
+
 [v0.3.3, 8/10/2018]
 "Check Sync" button
   "Page Up/Down" button steps through the event markers.

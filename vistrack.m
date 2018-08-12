@@ -186,8 +186,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.3.3';
-vcDate = '8/10/2018';
+vcVer = 'v0.3.4';
+vcDate = '8/12/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -910,20 +910,21 @@ S_trialset = load_trialset_(vcFile_trialset);
 % [pixpercm, angXaxis] = struct_get_(S_trialset.P, 'pixpercm', 'angXaxis');
 [tiImg, vcType_uniq, vcAnimal_uniq, viImg, csFiles_Track] = ...
     struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'viImg', 'csFiles_Track');
-
+warning off;
 hMsg = msgbox('Analyzing... (This closes automatically)');
 t1=tic;
 trFps = nan(size(tiImg));
 for iTrial = 1:numel(viImg)    
     try
         S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'xy0', 'vidFname', 'FPS', 'img0'); 
+        if isempty(get_(S_, 'FPS')) || isempty(get_(S_, 'TC')), error('FPS or TC not found'); end
         S_.vcFile_Track = csFiles_Track{iTrial};
 %         if fFix_sync, S_ = trial_fixsync_(S_, 0); end
         iImg_ = viImg(iTrial);        
-        trFps(iImg_) = get_set_(S_, 'FPS', nan);        
+        trFps(iImg_) = get_set_(S_, 'FPS', nan);                
         fprintf('.');
     catch
-        disp(csFiles_Track{iTrial});
+        fprintf('\n\t%s: %s\n', csFiles_Track{iTrial}, lasterr());
     end
 end %for
 fprintf('\n\ttook %0.1fs\n', toc(t1));
@@ -1154,7 +1155,8 @@ if isempty(P), P = load_settings_(); end
 vrXY_food = mrPos_shape_meter(end,1:2);
 mrV_F = bsxfun(@minus, vrXY_food, mrXY_h);
 [A_F, D_F] = cart2pol_(mrV_F(:,1), mrV_F(:,2));
-A_E = min(mod(A_F-A_H, 180), mod(A_H-A_F, 180));
+% A_E = min(mod(A_F-A_H, 180), mod(A_H-A_F, 180));
+A_E = mod(A_F-A_H+90, 180) - 90;
 
 % determine shape mask
 dist_cut = get_set_(P, 'dist_cm_shapes', 3) / 100; % in meters
@@ -1296,7 +1298,7 @@ fprintf('Session:%d, Trial:%d, Animal:%c\n', iSession, iTrial, cAnimal);
 S_trialset = get0_('S_trialset');
 vcVidExt = get_set_(S_trialset.P, 'vcVidExt', '.wmv');
 % vcFormat = sprintf('*%02d%c%d.%s$', iSession, cAnimal, iTrial, vcVidExt)
-vcFormat = sprintf('%02d%c%d*_Track.mat', iSession, cAnimal, iTrial);
+vcFormat = sprintf('%02d%c%d(\\w*)_Track.mat', iSession, cAnimal, iTrial);
 cs = cellfun(@(x)regexpi(x, vcFormat, 'match'), S_trialset.csFiles_Track, 'UniformOutput', 0);
 iFind = find(~cellfun(@isempty, cs));
 if ~isempty(iFind)
@@ -1617,19 +1619,35 @@ set(hFig_overview, 'Name', sprintf('# Shapes: %s', vcFile_trialset));
 nFiles = numel(cS_trial);
 hFig_tbl = figure_new_('FigShape', ['Shape locations: ', vcFile_trialset], [0,0,.5,1]);
 iTrial = 1;
-hFig_tbl.UserData = makeStruct_(S_trialset, P, cS_trial, iTrial, tnShapes, vhImg_overview);
+hFig_tbl.UserData = makeStruct_(S_trialset, P, iTrial, tnShapes, vhImg_overview);
+set0_(cS_trial);
 hFig_tbl.KeyPressFcn = @(h,e)keypress_FigShape_(h,e);
 plotShapes_trial_(hFig_tbl, iTrial);
-uiwait(msgbox('Right-click on the shapes and food to fill the table. Press "OK" when finished.'));
+% uiwait(msgbox('Right-click on the shapes and food to fill the table. Press "OK" when finished.'));
+msgbox('Right-click on the shapes and food to fill the table. Close the figure when finished.');
+uiwait(hFig_tbl);
 
 % save
-if ~isvalid(hFig_tbl), msgbox('Table is closed by user, nothing is saved.'); return; end
+% if ~isvalid(hFig_tbl), msgbox('Table is closed by user, nothing is saved.'); return; end
+if ~questdlg_('Save the coordinates?'), return; end
 hMsgbox = msgbox('Saving... (This closes automatically)');
-S_fig = hFig_tbl.UserData;
 vcFile_mat = strrep(vcFile_trialset, '.trialset', '_trialset.mat');
-save_var_(vcFile_mat, 'cS_trial', get_(S_fig, 'cS_trial'));
+save_var_(vcFile_mat, 'cS_trial', get0_('cS_trial'));
 close_(hFig_tbl, hFig_overview, hMsgbox);
 msgbox_(['Shape info saved to ', vcFile_mat]);
+end %func
+
+
+%--------------------------------------------------------------------------
+% 08/12/18 JJJ: Get yes or no answer from the user
+function flag = questdlg_(vcTitle, flag)
+% flag: default is yes (1) or no (0)
+if nargin<2, flag = 1; end
+if flag
+    flag = strcmpi(questdlg(vcTitle,'','Yes','No','Yes'), 'Yes');
+else
+    flag = strcmpi(questdlg(vcTitle,'','Yes','No','No'), 'Yes');
+end
 end %func
 
 
@@ -1664,9 +1682,11 @@ end %func
         
 %--------------------------------------------------------------------------
 function plotShapes_trial_(hFig_tbl, iTrial)
-% S_ = cS_trial{iFile};
+
 S_fig = hFig_tbl.UserData;
-S_ = S_fig.cS_trial{iTrial};
+cS_trial = get0_('cS_trial');
+S_ = cS_trial{iTrial};
+
 
 P1 = S_fig.P;
 P1.nSkip_img = get_set_(P1, 'nSkip_img', 2);
@@ -1711,14 +1731,14 @@ if isempty(hTable)
         'Position', [10 10 400 200], 'RowName', P1.csShapes, ...
         'ColumnName', {'X pos (grid)', 'Y pos (grid)', 'Angle (deg)'});
     hTable.ColumnEditable = true(1, 3);    
-    hTable.CellEditCallback = @(a,b)draw_shapes_tbl_(hImage, hTable);
+    hTable.CellEditCallback = @(a,b)draw_shapes_tbl_(hImage, hTable, iTrial);
 else
     hTable.Data = S_.mrPos_shape;
 end
 
 % Update
 delete_(get_(S_fig, 'vhShapes'));
-vhShapes = draw_shapes_tbl_(hImage, hTable);
+vhShapes = draw_shapes_tbl_(hImage, hTable, iTrial);
 contextmenu_(hImage, hTable);
 hFig_tbl.UserData = struct_add_(S_fig, hAxes, hImage, hTable, hGrid, iTrial, vhShapes, vhShapes);
 end %func
@@ -1728,12 +1748,12 @@ end %func
 function img_adj = imadjust_mask_(img, mlMask)
 if nargin<2, mlMask = []; end
 if isempty(mlMask)
-    int_lim = quantile(img(img>0), [.01, .99]);
+    int_lim = quantile(single(img(img>0)), [.01, .99]);
 else
-    int_lim = quantile(img(~mlMask), [.01, .99]);
+    int_lim = quantile(single(img(~mlMask)), [.01, .99]);
 end
 % imadjust excluding the mask
-img_adj = imadjust(img, double(int_lim)/255, [0, 1]);
+img_adj = imadjust(img, (int_lim)/255, [0, 1]);
 end %func
 
 
@@ -1741,7 +1761,8 @@ end %func
 function keypress_FigShape_(hFig, event)
 S_fig = get(hFig, 'UserData');
 nStep = 1 + key_modifier_(event, 'shift')*3;
-nTrials = numel(S_fig.cS_trial);
+cS_trial = get0_('cS_trial');
+nTrials = numel(cS_trial);
 switch lower(event.Key)
     case 'h'
         msgbox(...
@@ -1750,8 +1771,9 @@ switch lower(event.Key)
             '[G]oto trial', 
             '[Home]: First trial', 
             '[END]: Last trial', 
-            '[E]xport coordinates to csv'
-            '[T]rajectory toggle'}, ...
+            '[E]xport coordinates to csv',
+            '[T]rajectory toggle',
+            '[S]ampling density'}, ...
                 'Shortcuts');        
             
     case {'leftarrow', 'rightarrow', 'home', 'end'}
@@ -1775,8 +1797,10 @@ switch lower(event.Key)
         
     case 'g'
         vcTrial = inputdlg('Trial ID: ');
+        vcTrial = vcTrial{1};
         if isempty(vcTrial), return; end
-        csDataID = getDataID_cS_(S_fig.cS_trial);
+        vcTrial = path2DataID_(vcTrial);
+        csDataID = getDataID_cS_(cS_trial);
         iTrial = find(strcmp(vcTrial, csDataID));
         if isempty(iTrial)
             msgbox(['Trial not found: ', vcTrial]);
@@ -1788,7 +1812,7 @@ switch lower(event.Key)
         end
         
     case 'e'
-        S_trial = S_fig.cS_trial{S_fig.iTrial};
+        S_trial = cS_trial{S_fig.iTrial};
         trial2csv_(S_trial);
         
     case 't' % draw trajectory
@@ -1798,6 +1822,16 @@ switch lower(event.Key)
             draw_traj_trial_(hFig, S_fig.iTrial);
         end  
         
+    case 's' % Sampling density
+        S_trial = cS_trial{S_fig.iTrial};
+        P1 = setfield(S_fig.P, 'xy0', S_trial.xy0);
+        mrTXYARD_rs = resample_trial_(S_trial, P1);
+        vrD = mrTXYARD_rs(:,6);
+        [vrX, vrY] = cm2pix_(mrTXYARD_rs(:,2:3)*100, P1);
+        S_trial = struct_add_(S_trial, vrX, vrY, vrD);
+        hFig_grid = figure_new_('FigGrid', S_trial.vcFile_Track, [0,0,.5,.5]);
+        [RGB, mrPlot] = gridMap_(S_trial, P1, 'density');
+        imshow(RGB); title('Sampling density');
     otherwise
         return;
 end
@@ -1817,7 +1851,8 @@ end %func
 %--------------------------------------------------------------------------
 function [S_fig, hPlot] = draw_traj_trial_(hFig, iTrial)
 S_fig = hFig.UserData;
-S_ = S_fig.cS_trial{iTrial};
+cS_trial = get0_('cS_trial');
+S_ = cS_trial{iTrial};
 P = get_set_(S_fig, 'P', load_cfg_());
 nSkip_img = get_set_(P, 'nSkip_img', 2);
 
@@ -1914,12 +1949,16 @@ function h = draw_grid_(hImg, viGrid)
 P1 = hImg.UserData;
 [xx_cm, yy_cm] = meshgrid(viGrid);
 mrXY_pix = cm2pix_([xx_cm(:), yy_cm(:)] * P1.cm_per_grid, P1);
-h = plot(hImg.Parent, mrXY_pix(:,1), mrXY_pix(:,2), 'r+');
+h = plot(hImg.Parent, mrXY_pix(:,1), mrXY_pix(:,2), 'r.');
 end %func
 
 
 %--------------------------------------------------------------------------
-function vhPlot = draw_shapes_tbl_(hImg, tbl)
+function vhPlot = draw_shapes_tbl_(hImg, tbl, iTrial)
+
+hFig = hImg.Parent.Parent;
+S_fig = hFig.UserData;
+if nargin<3, iTrial = S_fig.iTrial; end
 P1 = hImg.UserData;
 delete_(get_(P1, 'vhPlot'));
 mrXY = tbl.Data;
@@ -1933,24 +1972,10 @@ end
 P1.vhPlot = vhPlot;
 set(hImg, 'UserData', P1);
 
-% update
-hFig = hImg.Parent.Parent;
-S_fig = hFig.UserData;
-
-% % update figure count
-% vhImg_overview = get_(S_fig, 'vhImg_overview');
-% try
-%     S_trial = S_fig.cS_trial{S_fig.iTrial};
-%     iAnimal = 
-%     hImg = vhImg_overview{iAnimal};
-%     tnShapes = hImg_overview.CData;
-% %     tnShapes(r
-% catch
-%     ;
-% end
-
 % Save table data to fig userdata
-S_fig.cS_trial{S_fig.iTrial}.mrPos_shape = tbl.Data;
+cS_trial = get0_('cS_trial');
+cS_trial{iTrial}.mrPos_shape = tbl.Data;
+set0_(cS_trial);
 S_fig.vhShapes = vhPlot;
 hFig.UserData = S_fig;
 end %func
@@ -2017,10 +2042,15 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function xy_pix = cm2pix_(xy_cm, P1)
+function varargout = cm2pix_(xy_cm, P1)
 xy_pix = xy_cm * P1.pixpercm;
 xy_pix(:,2) = -xy_pix(:,2); % change y axis
 xy_pix = bsxfun(@plus, rotatexy_(xy_pix, -P1.angXaxis), P1.xy0(:)');
+if nargout==1
+    varargout{1} = xy_pix;
+else
+    [varargout{1}, varargout{2}] = deal(xy_pix(:,1), xy_pix(:,2));
+end
 end %func
 
 
@@ -2112,6 +2142,14 @@ csDataID = cell(size(cS));
 for i=1:numel(cS)
     [~,csDataID{i},~] = fileparts(cS{i}.vidFname);
 end
+end %func
+
+
+%--------------------------------------------------------------------------
+function dataID = path2DataID_(vc)
+if iscell(vc), vc = vc{1}; end
+[~, dataID, ~] = fileparts(vc);
+dataID = strrep(dataID, '_Track', '');
 end %func
 
 
@@ -2375,11 +2413,11 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function [RGB, mrPlot] = gridMap_(vsTrial, P, mode, lim, mlMask)
-% mode: {'time', 'visit', 'time/visit'}
+function [RGB, mrPlot] = gridMap_(vsTrial, P, vcMode, lim, mlMask)
+% vcMode: {'time', 'visit', 'time/visit', 'density'}
 
 if nargin < 2, P = []; end
-if nargin < 3, mode = 'time'; end % visit, time, time/visit
+if nargin < 3, vcMode = 'time'; end % visit, time, time/visit
 if nargin < 4, lim = []; end
 if nargin < 5, mlMask = []; end
 
@@ -2393,12 +2431,13 @@ if iscell(vsTrial), vsTrial = cell2mat(vsTrial); end % make it an array
 xy0 = vsTrial(1).xy0;
 img0 = vsTrial(1).img0;    
 % mlMask = getImageMask(img0, [0 60], 'CENTRE');
-img0 = imrotate(imadjust(img0), angXaxis, 'nearest', 'crop');
+img0 = imrotate(imadjust(img0), -angXaxis, 'nearest', 'crop');
 
 %rotate vrX, vrY, and images
-vrX = poolVecFromStruct(vsTrial, 'vrX');
-vrY = poolVecFromStruct(vsTrial, 'vrY');
-rotMat = rotz(angXaxis);    rotMat = rotMat(1:2, 1:2);
+vrX = poolVecFromStruct(vsTrial, 'vrX'); % in meters
+vrY = poolVecFromStruct(vsTrial, 'vrY'); %  in meters
+try vrD = poolVecFromStruct(vsTrial, 'vrD'); catch, vrD = []; end
+rotMat = rotz(-angXaxis);    rotMat = rotMat(1:2, 1:2);
 mrXY = [vrX(:) - xy0(1), vrY(:) - xy0(2)] * rotMat;
 vrX = mrXY(:,1) + xy0(1);
 vrY = mrXY(:,2) + xy0(2);
@@ -2408,40 +2447,42 @@ viY = ceil(vrY/nGrid_map);
 [h, w] = size(img0);
 h = h / nGrid_map;
 w = w / nGrid_map;
-mnVisit = zeros(h, w);
-mnTime = zeros(h, w);
+[mrDensity, mnVisit, mnTime] = deal(zeros(h,w));
 for iy=1:h
     vlY = (viY == iy);
     for ix=1:w
-        viVisit = find(vlY & (viX == ix));        
+        viVisit = find(vlY & (viX == ix));  
+        if isempty(viVisit), continue; end
         mnTime(iy,ix) = numel(viVisit);
         nRepeats = sum(diff(viVisit) < nTime_map); % remove repeated counts
-        mnVisit(iy,ix) = numel(viVisit) - nRepeats;        
+        mnVisit(iy,ix) = numel(viVisit) - nRepeats;      
+        if ~isempty(vrD)
+            mrDensity(iy,ix) = 1 ./ mean(vrD(viVisit));
+            fprintf('.');
+        end
     end
 end
 
 mrTperV = mnTime ./ mnVisit;
 
-
-switch lower(mode)
+switch lower(vcMode)
     case 'time'
         mrPlot = mnTime;
     case 'visit'
         mrPlot = mnVisit;
     case 'time/visit'
         mrPlot = mrTperV;
+    case {'density', 'samplingdensity'}
+        mrPlot = mrDensity;
 end
 
-
-mnVisit1 = imresize(mrPlot, nGrid_map, 'nearest');
-% mnVisit1(~mlMask) = 0;
-
-if isempty(lim)
-    lim = [min(mnVisit1(:)) max(mnVisit1(:))];
-end
-
-mrVisit = uint8((mnVisit1 - lim(1)) / diff(lim) * 255);
+mnPlot_ = imresize(mrPlot, nGrid_map, 'nearest');
+if isempty(lim), lim = [min(mnPlot_(:)) max(mnPlot_(:))]; end
+mrVisit = uint8((mnPlot_ - lim(1)) / diff(lim) * 255);
 RGB = rgbmix_(img0, mrVisit, mlMask);
+if nargout==0
+    figure; imshow(RGB); title(sprintf('%s, clim=[%f, %f]', vcMode, lim(1), lim(2)));
+end
 end %func
 
 
@@ -2574,13 +2615,19 @@ end %func
 %--------------------------------------------------------------------------
 function keypress_FigSync_(hFig, event)
 S_fig = get(hFig, 'UserData');
-nStep = 1 + key_modifier_(event, 'shift')*3;
+if key_modifier_(event, 'shift')
+    nStep = 10;
+elseif key_modifier_(event, 'control')
+    nStep = 100; 
+else
+    nStep = 1;
+end
 nFrames = size(S_fig.mov, 3);
 switch lower(event.Key)
     case 'h'
         msgbox(...
             {'[H]elp', 
-            '(Shift)+[L/R]: Next Frame (Shift: quick jump)', 
+            '(Shift/Ctrl)+[L/R]: Next Frame (Shift:10x, Ctrl:100x)', 
             '[PgDn/PgUp]: Next/Prev Event Marker'            
             '[G]oto trial', 
             '[Home]: First trial', 
@@ -3053,13 +3100,12 @@ set0_(S_sync);
 if fPlot == 2, return; end
 
 % close the figure after done
-uiwait(msgbox_('Press OK when finished.'));
-close_(hFig);
+msgbox_('Close the figure when finished.');
+uiwait(hFig);
 
 S_sync = get0_('S_sync');
 TC = cam2adc_sync_(S_sync, handles.FLIM(1):handles.FLIM(2));    
-csAns = questdlg(sprintf('Save time sync? (mean error: %0.3fs)', std(TC-handles.TC)));
-if strcmpi(csAns, 'Yes') %save to file
+if questdlg_(sprintf('Save time sync? (mean error: %0.3fs)', std(TC-handles.TC)))
     handles.TC = TC;
     handles.FPS = diff(handles.FLIM([1,end])) / diff(handles.TC([1,end]));
     trial_save_(handles);
@@ -3461,8 +3507,8 @@ handles.FPS = diff(handles.FLIM0) / diff(handles.TLIM0);
 
 % plot sync
 [~, hFig] = trial_fixsync_(handles, 2);
-uiwait(msgbox({'Press OK after checking the sync.', 'Press PageUp/PageDown/Left/Right to navigate'}));
-close_(hFig);
+msgbox({'Close the figure after checking the sync.', 'Press PageUp/PageDown/Left/Right to navigate'});
+uiwait(hFig);
 
 vcAns = questdlg('Synchronized correctly?');
 if strcmpi(vcAns, 'Yes')
