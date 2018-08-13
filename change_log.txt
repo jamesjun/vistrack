@@ -1,6 +1,18 @@
 Visual Tracker (vistrack) change log
   James Jun, Flatiron Institute
 
+[v0.3.5, 8/13/2018]
+"Bar plots"
+  Includes bar plots for the pooled probe trials
+  "csAnimals" is used to correctly select the animals to plot. (applies to List files, Learning curve)
+"Input Coordinates" button
+  Pressing "S" plots sampling density bar plots for the individual trial.
+"Export CSV" button
+  Added velocity (signed) and distance/escan columns at the end
+"default.cfg"
+  Added distance to the circular wall from the center ("diameter_cm_wall")
+    and exclusion distance ("dist_cm_wall") parameters
+
 [v0.3.4, 8/12/2018]
 "Export to CSV (all)" and "Expport to CSV"
   A_E (error angle: food vec-heading vec) now ranges from -90..90 deg (previously 0..90 deg)

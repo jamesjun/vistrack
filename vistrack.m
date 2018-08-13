@@ -186,8 +186,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.3.4';
-vcDate = '8/12/2018';
+vcVer = 'v0.3.5';
+vcDate = '8/13/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -850,15 +850,13 @@ csField_load = setdiff(S_trialset.P.csFields, {'MOV', 'ADC','img1','img00'}); % 
 for iTrial = 1:numel(viImg)    
     try
         S_ = load(csFiles_Track{iTrial}, csField_load{:}); 
-%         S_ = load(csFiles_Track{iTrial}, 'TC', 'XC', 'YC', 'AC', 'xy0', 'vidFname', 'FPS', 'img0', 'ADCTS', 'csSettings'); 
         S_.vcFile_Track = csFiles_Track{iTrial};
-        iImg_ = viImg(iTrial);        
-%         if S_trialset.vlProbe(iTrial)
+        iImg_ = viImg(iTrial);                
         cS_trial{end+1} = S_;
-%         else
+        if ~S_trialset.vlProbe(iTrial)
             trPath(iImg_) = trial_pathlen_(S_, pixpercm, angXaxis);
             trDur(iImg_) = diff(S_.TC([1,end]));
-%         end
+        end
         trFps(iImg_) = get_set_(S_, 'FPS', nan);        
         fprintf('.');
     catch
@@ -881,7 +879,7 @@ for iAnimal = 1:size(tiImg,3)
     trPath_(:,:,iAnimal) = mrPath2;
     trDur_(:,:,iAnimal) = mrDur2;
 end
-[trPath_, trDur_] = deal(permute(trPath_,[1,3,2]), permute(trDur_,[1,3,2]));
+[trPath_, trDur_] = deal(permute(trPath_,[1,3,2]), permute(trDur_,[1,3,2])); % nSessions x nAnimals x nDate 
 [mrPath, mrDur] = deal(reshape(trPath_,[],nDates)/100, reshape(trDur_,[],nDates));
 viCol = find(~any(isnan(mrPath)));
 [mrPath, mrDur] = deal(mrPath(:,viCol), mrDur(:,viCol));
@@ -892,7 +890,7 @@ if nargout==0
     set(hFig, 'Name', sprintf('FPS: %s', vcFile_trialset));
     
     % Plot learning curve
-    figure_new_('', ['Learning curve: ', vcFile_trialset]);
+    figure_new_('', ['Learning curve: ', vcFile_trialset, '; Animals:', cell2mat(S_trialset.csAnimals)]);
     subplot 211; errorbar_iqr_(mrPath); ylabel('Dist (m)'); grid on; xlabel('Session #');
     subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');    
 end
@@ -1054,13 +1052,15 @@ end
 csShapes = get_(P, 'csShapes');
 csFormat = {...
     '_Track.csv files:', 
-    '  Columns: T(s), X(m), Y(m), A(deg), R(Hz), D(m):',
+    '  Columns: T(s), X(m), Y(m), A(deg), R(Hz), D(m), V(m/s), S(m):',
     '    T: camera frame time',
     '    X: x coordinate of the head tip @ grid frame of reference',
     '    Y: y coordinate of the head tip @ grid frame of reference',
     '    A: head orientation',
     '    R: EOD rate',
-    '    D: dist per EOD pulse (=1/sampling_density)',
+    '    D: Distance per EOD pulse (=1/sampling_density)',
+    '    V: Head speed (m/s, signed)',
+    '    S: Distance per Escan (=1/escan_density)',    
     '_shapes.csv files:', 
     '  Columns: X(m), Y(m), A(deg):',
     '    X(m): x coordinate of the shape center @ grid frame of reference',
@@ -1088,37 +1088,53 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function mrTXYARD_rs = resample_trial_(S_trial, P)
-fFilter = 1;
+function [mrTXYARDVS_rs, P1] = resample_trial_(S_trial, P)
+% Output
+% -----
+% mrTXYARDV_rs: 
+%   Time(s), X-pos(m), Y-pos(m), Angle(deg), Sampling Rate(Hz),
+%   Dist/pulse(m), Velocity(m/s), Dist/E-Scan (m)
 
 % smooth the trajectory
-if fFilter
-    mrXY_pix = [ filtPos(S_trial.XC(:,2), P.TRAJ_NFILT, 1), filtPos(S_trial.YC(:,2), P.TRAJ_NFILT, 1)];
-else
-    mrXY_pix = [S_trial.XC(:,2), S_trial.YC(:,2)];
-end
+% if fFilter
+fh_filt = @(x)filtPos(x, P.TRAJ_NFILT, 1);
 P1 = setfield(P, 'xy0', S_trial.xy0);
-mrXY_m = pix2cm_(mrXY_pix, P1) / 100; % / P.pixpercm / 100;
-vrA_m = pix2cm_deg_(S_trial.AC(:,2), P1);
-
-% resample time and combine EOD
 sRateHz_rs = get_set_(P, 'sRateHz_resample', 100);
 vrT_rs = (S_trial.TC(1):1/sRateHz_rs:S_trial.TC(end))';
-mrXYA_rs = interp1(S_trial.TC(:), [mrXY_m, vrA_m], vrT_rs);
+fh_interp = @(x)interp1(S_trial.TC(:), x, vrT_rs);
+
+mrXY_pix_2 = [fh_filt(S_trial.XC(:,2)), fh_filt(S_trial.YC(:,2))];
+mrXY_pix_3 = [fh_filt(S_trial.XC(:,3)), fh_filt(S_trial.YC(:,3))];
+mrXY_m_2_rs = fh_interp(pix2cm_(mrXY_pix_2, P1) / 100);
+mrXY_m_3_rs = fh_interp(pix2cm_(mrXY_pix_3, P1) / 100);
+vrA_rs = fh_interp(pix2cm_deg_(S_trial.AC(:,2), P1));
 
 % add EOD and sampling density
 [vtEodr, vrEodr] = getEodr_adc_(S_trial, P);
 vrR_rs = interp1(vtEodr, vrEodr, vrT_rs);
 
+% Compute velocity
+mrXY_23_rs = mrXY_m_2_rs - mrXY_m_3_rs;
+[VX, VY] = deal(diff3_(mrXY_m_2_rs(:,1)), diff3_(mrXY_m_2_rs(:,2)));
+vrV_rs = hypot(VX, VY) .* sign(mrXY_23_rs(:,1).*VX + mrXY_23_rs(:,2).*VY) * sRateHz_rs;
+
 % Count sampling density
-vrLr = cumsum(hypot(diff3_(mrXYA_rs(:,1)), diff3_(mrXYA_rs(:,2))));
+vrLr = cumsum(hypot(VX, VY));
 vtEodr_ = vtEodr(vtEodr>=vrT_rs(1) & vtEodr <= vrT_rs(end));
 vrD = diff3_(interp1(vrT_rs, vrLr, vtEodr_, 'spline')); % distance between EOD
 vrD_rs = interp1(vtEodr_, vrD, vrT_rs);
 vrD_rs(isnan(vrD_rs)) = 0;
 
+% calc ESCAN rate
+viDs = findDIsac(diff3_(diff3_(vtEodr))); 
+vtEscan = vtEodr(viDs);
+vrDs = diff3_(interp1(vrT_rs, vrLr, vtEscan, 'spline')); % distance between EOD
+vrS_rs = interp1(vtEscan, vrDs, vrT_rs, 'spline');
+vrS_rs(isnan(vrS_rs)) = 0;
+
 % get EOD timestamps
-mrTXYARD_rs = [vrT_rs, mrXYA_rs, vrR_rs(:), vrD_rs(:)];
+mrTXYARDVS_rs = [vrT_rs, mrXY_m_2_rs, vrA_rs(:), vrR_rs(:), vrD_rs(:), vrV_rs(:), vrS_rs(:)];
+% figure; quiver(mrXY_m_2_rs(:,1),mrXY_m_2_rs(:,2), VX, VY, 2, 'r.')
 end %func
 
 
@@ -1344,7 +1360,7 @@ S_trialset = file2struct(vcFile_trialset);
 [csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
 if isempty(csFiles_Track), return; end
     
-[csDataID, S_trialset_]  = get_dataid_(csFiles_Track);
+[csDataID, S_trialset_, csFiles_Track]  = get_dataid_(csFiles_Track, get_(S_trialset, 'csAnimals'));
 S_trialset = struct_merge_(S_trialset, S_trialset_);
 [vcAnimal_uniq, vnAnimal_uniq] = unique_(S_trialset.vcAnimal);
 [viDate_uniq, vnDate_uniq] = unique_(S_trialset.viDate);
@@ -1374,7 +1390,7 @@ tiImg(viImg(S_trialset.vlProbe)) = 2;
 % find missing trials
 [viDate_missing, viTrial_missing, viAnimal_missing] = ind2sub(size(tiImg), find(tiImg==0));
 csDataID_missing = arrayfun(@(a,b,c)sprintf('%c%02d%c%d',vcType_uniq(1),a,b,c), ...
-    viDate_missing, vcAnimal_uniq(viAnimal_missing)', viTrial_missing, ...
+    viDate_missing, toVec_(vcAnimal_uniq(viAnimal_missing)), viTrial_missing, ...
         'UniformOutput', 0);
 
 fh3_ = @(cs)(cell2mat(cellfun(@(x)sprintf('  %s\n',x),cs, 'UniformOutput', 0)));
@@ -1396,6 +1412,18 @@ S_trialset = struct_add_(S_trialset, P, vcFile_trialset, ...
     csFiles_Track, csDir_trial, csMsg, csMsg2, ...
     tiImg, viDate, viTrial, viAnimal, viImg, ...
     vcAnimal_uniq, viDate_uniq, vcType_uniq, viTrial_uniq);
+end %func
+
+
+%--------------------------------------------------------------------------
+function vr = toVec_(vr)
+vr = vr(:);
+end %func
+
+
+%--------------------------------------------------------------------------
+function vr = toRow_(vr)
+vr = vr(:)';
 end %func
 
 
@@ -1438,7 +1466,10 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function [csDataID, S]  = get_dataid_(csFiles)
+function [csDataID, S, csFiles]  = get_dataid_(csFiles, csAnimals)
+if nargin<2, csAnimals = {}; end
+
+
 csDataID = cell(size(csFiles));
 [viDate, viTrial] = deal(zeros(size(csFiles)));
 vlProbe = false(size(csFiles));
@@ -1453,7 +1484,16 @@ for iFile=1:numel(csFiles)
     viTrial(iFile) = str2num(vcDateID_(5));
     vlProbe(iFile) = numel(vcDateID_) > 5;
 end %for
-S = makeStruct_(vcType, viDate, vcAnimal, viTrial, vlProbe);
+
+% Filter by animals
+if ~isempty(csAnimals)
+    vcAnimal_plot = cell2mat(csAnimals);
+    viKeep = find(ismember(vcAnimal, vcAnimal_plot));
+    [vcType, viDate, vcAnimal, viTrial, vlProbe, csFiles] = ...
+        deal(vcType(viKeep), viDate(viKeep), vcAnimal(viKeep), viTrial(viKeep), vlProbe(viKeep), csFiles(viKeep));
+end
+
+S = makeStruct_(vcType, viDate, vcAnimal, viTrial, vlProbe, csFiles);
 end %func
 
 
@@ -1573,7 +1613,8 @@ function trialset_barplots_(vcFile_trialset)
 % iData: 1, ang: -0.946 deg, pixpercm: 7.252, x0: 793.2, y0: 599.2
 % run S141106_LearningCurve_Control.m first cell
 
-[mrPath, mrDur, S_trialset] = trialset_learningcurve_(vcFile_trialset);
+% [mrPath, mrDur, S_trialset, cS_trial] = trialset_learningcurve_(vcFile_trialset);
+[cS_trial, S_trialset, mrPath, mrDur] = loadShapes_trialset_(vcFile_trialset);
 
 viEarly = get_(S_trialset, 'viEarly_trial');
 viLate = get_(S_trialset, 'viLate_trial');
@@ -1588,16 +1629,55 @@ end
 quantLim = get_set_(S_trialset, 'quantLim', [1/8, 7/8]);
 [vrPath_early, vrPath_late, vrDur_early, vrDur_late, vrSpeed_early, vrSpeed_late] = ...
     trim_quantile_(vrPath_early, vrPath_late, vrDur_early, vrDur_late, vrSpeed_early, vrSpeed_late, quantLim);
+vcAnimal_use = cell2mat(S_trialset.csAnimals);
 
-figure_new_('', ['Early vs Late: ', vcFile_trialset]);
+
+figure_new_('', ['Early vs Late: ', vcFile_trialset, '; Animals: ', vcAnimal_use]);
 subplot 131;
 bar_mean_sd_({vrPath_early, vrPath_late}, {'Early', 'Late'}, 'Pathlen (m)');
 subplot 132;
 bar_mean_sd_({vrDur_early, vrDur_late}, {'Early', 'Late'}, 'Duration (s)');
 subplot 133;
 bar_mean_sd_({vrSpeed_early, vrSpeed_late}, {'Early', 'Late'}, 'Speed (m/s)');
-
 msgbox(sprintf('Early Sessions: %s\nLate Sessions: %s', sprintf('%d ', viEarly), sprintf('%d ', viLate)));
+
+% Plot probe trials
+S_shape = pool_probe_trialset_(S_trialset, cS_trial);
+vcFigName = sprintf('%s; Animals: %s; Probe trials', S_trialset.vcFile_trialset, cell2mat(S_trialset.csAnimals));
+hFig = figure_new_('', vcFigName, [0 .5 .5 .5]); 
+viShapes = 1:6;
+subplot 241; bar(1./S_shape.mrDRVS_shape(1,viShapes)); ylabel('Sampling density'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+subplot 242; bar(S_shape.mrDRVS_shape(2,viShapes)); ylabel('Sampling Rate (Hz)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+subplot 243; bar(S_shape.mrDRVS_shape(3,viShapes)); ylabel('Speed (m/s)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+subplot 244; bar(1./S_shape.mrDRVS_shape(4,viShapes)); ylabel('EScan density'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;        
+subplot 245; bar(S_shape.vnVisit_shape(viShapes)); ylabel('# visits'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+subplot 246; bar(S_shape.vtVisit_shape(viShapes)); ylabel('t visit (s)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+subplot 247; bar(S_shape.vtVisit_shape(viShapes) ./ S_shape.vnVisit_shape(viShapes)); ylabel('t per visit (s)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+subplot 248; bar(S_shape.vpBackward_shape(viShapes)); ylabel('Backward swim prob.'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+xtickangle(hFig.Children, -30);
+% xtickangle(S_fig.hAx, -20); 
+end %func
+
+
+%--------------------------------------------------------------------------
+function S_shape = pool_probe_trialset_(S_trialset, cS_trial)
+
+cS_probe = cS_trial(S_trialset.vlProbe);
+cS_shape = cell(size(cS_probe));
+for i=1:numel(cS_shape)
+    cS_shape{i} = nearShapes_trial_(cS_probe{i}, S_trialset.P);        
+end
+vS_shape = cell2mat(cS_shape)';
+% fh_pool = @(vc)cell2mat({vS_shape.(vc)}');
+% csName = fieldnames(vS_shape(1));
+% csName = setdiff(csName, 'csDist_shape');
+csName = {'mlDist_shape', 'vrD', 'vrR', 'vrS', 'vrV'};
+S_shape = struct();
+for i=1:numel(csName)
+    eval(sprintf('S_shape.%s=cell2mat({vS_shape.%s}'');', csName{i}, csName{i}));
+end
+S_shape.csDist_shape = vS_shape(1).csDist_shape;
+S_shape = S_shape_calc_(S_shape, S_trialset.P);
 end %func
 
 
@@ -1763,6 +1843,8 @@ S_fig = get(hFig, 'UserData');
 nStep = 1 + key_modifier_(event, 'shift')*3;
 cS_trial = get0_('cS_trial');
 nTrials = numel(cS_trial);
+S_trial = cS_trial{S_fig.iTrial};
+
 switch lower(event.Key)
     case 'h'
         msgbox(...
@@ -1773,7 +1855,8 @@ switch lower(event.Key)
             '[END]: Last trial', 
             '[E]xport coordinates to csv',
             '[T]rajectory toggle',
-            '[S]ampling density'}, ...
+            '[S]ampling density', 
+            '[C]opy trialset path'}, ...
                 'Shortcuts');        
             
     case {'leftarrow', 'rightarrow', 'home', 'end'}
@@ -1812,7 +1895,6 @@ switch lower(event.Key)
         end
         
     case 'e'
-        S_trial = cS_trial{S_fig.iTrial};
         trial2csv_(S_trial);
         
     case 't' % draw trajectory
@@ -1823,17 +1905,124 @@ switch lower(event.Key)
         end  
         
     case 's' % Sampling density
-        S_trial = cS_trial{S_fig.iTrial};
-        P1 = setfield(S_fig.P, 'xy0', S_trial.xy0);
-        mrTXYARD_rs = resample_trial_(S_trial, P1);
-        vrD = mrTXYARD_rs(:,6);
-        [vrX, vrY] = cm2pix_(mrTXYARD_rs(:,2:3)*100, P1);
+        [S_shape, mrTXYARDVS_rs, P1] = nearShapes_trial_(S_trial, S_fig.P);        
+        [vrX, vrY] = cm2pix_(mrTXYARDVS_rs(:,2:3)*100, P1);
+        vrD = mrTXYARDVS_rs(:,6);
         S_trial = struct_add_(S_trial, vrX, vrY, vrD);
         hFig_grid = figure_new_('FigGrid', S_trial.vcFile_Track, [0,0,.5,.5]);
         [RGB, mrPlot] = gridMap_(S_trial, P1, 'density');
         imshow(RGB); title('Sampling density');
+        
+        hFig = figure_new_('',S_trial.vcFile_Track, [0 .5 .5 .5]); 
+        viShapes = 1:6;
+        subplot 241; bar(1./S_shape.mrDRVS_shape(1,viShapes)); ylabel('Sampling density'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+        subplot 242; bar(S_shape.mrDRVS_shape(2,viShapes)); ylabel('Sampling Rate (Hz)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+        subplot 243; bar(S_shape.mrDRVS_shape(3,viShapes)); ylabel('Speed (m/s)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+        subplot 244; bar(1./S_shape.mrDRVS_shape(4,viShapes)); ylabel('EScan density'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;        
+        subplot 245; bar(S_shape.vnVisit_shape(viShapes)); ylabel('# visits'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+        subplot 246; bar(S_shape.vtVisit_shape(viShapes)); ylabel('t visit (s)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+        subplot 247; bar(S_shape.vtVisit_shape(viShapes) ./ S_shape.vnVisit_shape(viShapes)); ylabel('t per visit (s)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+        subplot 248; bar(S_shape.vpBackward_shape(viShapes)); ylabel('Backward swim prob.'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
+
+    case 'c'
+        clipboard('copy', S_trial.vcFile_Track);
+        msgbox(sprintf('%s copied to clipboard', S_trial.vcFile_Track));
+        
     otherwise
         return;
+end
+end %func
+
+
+%--------------------------------------------------------------------------
+function [S_shape, mrTXYARDVS_rs, P1] = nearShapes_trial_(S_trial, P)
+P1 = setfield(P, 'xy0', S_trial.xy0);
+mrTXYARDVS_rs = resample_trial_(S_trial, P1);
+[mrXY_h, vrD, vrR, vrV, vrS] = ...
+    deal(mrTXYARDVS_rs(:,2:3), mrTXYARDVS_rs(:,6), mrTXYARDVS_rs(:,5), mrTXYARDVS_rs(:,7), mrTXYARDVS_rs(:,8));
+% vrV = hypot(diff3_(mrXY_h(:,1)), diff3_(mrXY_h(:,2))) * get_set_(P, 'sRateHz_resample', 100); % meter per sec
+
+cm_per_grid = get_set_(P, 'cm_per_grid', 5);
+mrPos_shape_meter = S_trial.mrPos_shape;
+mrPos_shape_meter(:,1:2) = mrPos_shape_meter(:,1:2) * cm_per_grid / 100;
+nShapes = size(mrPos_shape_meter,1);
+mlDist_shape = false(size(mrXY_h,1), nShapes);
+dist_cut = get_set_(P, 'dist_cm_shapes', 3) / 100;
+
+for iShape = 1:nShapes
+    vcShape = strtok(P.csShapes{iShape}, ' ');
+    xya_ = mrPos_shape_meter(iShape,:);
+    len_ = P.vrShapes(iShape)/100; % in meter
+    [mrXY_poly_, fCircle] = get_polygon_(vcShape, xya_(1:2), len_, xya_(3));
+    if fCircle
+        vrD_ = hypot(xya_(1)-mrXY_h(:,1), xya_(2)-mrXY_h(:,2)) - len_/2; 
+    else %polygon
+        vrD_ = nearest_perimeter_(mrXY_poly_, mrXY_h); % convert to meter
+    end
+    mlDist_shape(:,iShape) = vrD_ <= dist_cut;
+end
+
+% distance to the wall
+r_wall = get_set_(P, 'diameter_cm_wall', 150) / 2 / 100;
+dist_wall = get_set_(P, 'dist_cm_wall', 15) / 100; % 15 cm from the wall
+vl_wall = hypot(mrXY_h(:,1), mrXY_h(:,2)) >= (r_wall - dist_wall);
+mlDist_shape = [mlDist_shape, vl_wall, ~vl_wall];
+csDist_shape = [P.csShapes, 'Wall', 'Not Wall'];
+
+S_shape = makeStruct_(mlDist_shape, csDist_shape, vrD, vrR, vrV, vrS);
+S_shape = S_shape_calc_(S_shape, P);
+end %func
+
+
+%--------------------------------------------------------------------------
+function S_shape = S_shape_calc_(S_shape, P)
+% output 
+% ------
+% mrDRVS_shape
+% vnVisit_shape
+% vtVisit_shape
+% vpBackward_shape
+[vrD, vrR, vrV, vrS, mlDist_shape] = struct_get_(S_shape, 'vrD', 'vrR', 'vrV', 'vrS', 'mlDist_shape');
+
+% sampling density by shapes
+sRateHz_rs = get_set_(P, 'sRateHz_resample', 100);
+mrDRVS_shape = region_median_([vrD, vrR, abs(vrV), vrS], mlDist_shape, @nanmedian); %@nanmean
+[~, vnVisit_shape] = findup_ml_(mlDist_shape, sRateHz_rs);
+% vnVisit_shape = sum(diff(mlDist_shape)>0); % clean up transitions
+vtVisit_shape = sum(mlDist_shape) / sRateHz_rs;
+vpBackward_shape = region_median_(sign(vrV)<0, mlDist_shape, @nanmean);
+
+S_shape = struct_add_(S_shape, mrDRVS_shape, vnVisit_shape, vtVisit_shape, vpBackward_shape);
+end %func
+
+
+%--------------------------------------------------------------------------
+function [cvi, vn] = findup_ml_(ml, nRefrac)
+cvi = cell(1, size(ml,2));
+vn = zeros(1, size(ml,2));
+for iCol=1:size(ml,2)
+    vi_ = find(diff(ml(:,iCol))>0);
+    vn_ = diff(vi_);
+    viiKill_ = find(vn_<nRefrac);
+    if ~isempty(viiKill_)
+        vi_(viiKill_ + 1) = []; % remove 
+    end
+    cvi{iCol} = vi_;
+    vn(iCol) = numel(vi_);
+end
+% vn = cell2mat(cellfun(@(x)diff(x), cvi', 'UniformOutput', 0));
+end %func
+
+
+%--------------------------------------------------------------------------
+function mrMed = region_median_(mr, ml, fh)
+if nargin<3, fh = @median; end
+mrMed = nan(size(mr,2), size(ml,2));
+for iCol = 1:size(ml,2)
+    vi_ = find(ml(:,iCol));
+    if ~isempty(vi_)
+        mrMed(:,iCol) = fh(mr(vi_,:));
+    end
 end
 end %func
 
@@ -1852,12 +2041,18 @@ end %func
 function [S_fig, hPlot] = draw_traj_trial_(hFig, iTrial)
 S_fig = hFig.UserData;
 cS_trial = get0_('cS_trial');
-S_ = cS_trial{iTrial};
+S_trial = cS_trial{iTrial};
 P = get_set_(S_fig, 'P', load_cfg_());
 nSkip_img = get_set_(P, 'nSkip_img', 2);
 
+[S_shape, mrTXYARDVS_rs, P1] = nearShapes_trial_(S_trial, P);
+mrXY_pix = cm2pix_(mrTXYARDVS_rs(:,2:3)*100, P1);
+
 try
-    [X,Y] = deal(S_.XC(:,2)/nSkip_img, S_.YC(:,2)/nSkip_img);
+%     [X,Y] = deal(S_trial.XC(:,2)/nSkip_img, S_trial.YC(:,2)/nSkip_img);
+    [X,Y] = deal(mrXY_pix(:,1)/nSkip_img, mrXY_pix(:,2)/nSkip_img);
+%     vl = ~S_shape.mlDist_shape(:,end); % location query
+%     [X(vl),Y(vl)] = deal(nan(sum(vl),1));
     hPlot = get_(S_fig, 'hTraj');
     if isvalid_(hPlot)
         [hPlot.XData, hPlot.YData] = deal(X, Y);    
@@ -2098,14 +2293,14 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function [cS_trial, S_trialset, trImg0] = loadShapes_trialset_(vcFile_trialset)
+function [cS_trial, S_trialset, mrPath, mrDur] = loadShapes_trialset_(vcFile_trialset)
 
 [mrPath, mrDur, S_trialset, cS_trial] = trialset_learningcurve_(vcFile_trialset);
 nSkip_img = get_set_(S_trialset.P, 'nSkip_img', 2);
-if nargout>=3
-    trImg0 = cellfun(@(x)imadjust(binned_image_(x.img0, nSkip_img)), cS_trial, 'UniformOutput', 0);
-    trImg0 = cat(3, trImg0{:});
-end
+% if nargout>=3
+%     trImg0 = cellfun(@(x)imadjust(binned_image_(x.img0, nSkip_img)), cS_trial, 'UniformOutput', 0);
+%     trImg0 = cat(3, trImg0{:});
+% end
 
 % default shape table
 csShapes = get_set_(S_trialset, 'csShapes', {'Triangle Lg', 'Triangle Sm', 'Square Lg', 'Square Sm', 'Circle Lg', 'Circle Sm', 'Food'});
@@ -2349,7 +2544,7 @@ end %func
 function trialset_exportcsv_(vcFile_trialset)
 h = msgbox_('Exporting the trialset to csv files (This closes automatically)');
 % S_trialset = load_trialset_(vcFile_trialset);
-[cS_trial, S_trialset, trImg0] = loadShapes_trialset_(vcFile_trialset);
+[cS_trial, S_trialset] = loadShapes_trialset_(vcFile_trialset);
 % csFiles_track = S_trialset.csFiles_Track;
 % csFiles_failed = {};
 % for iFile = 1:numel(csFiles_track)
@@ -2429,7 +2624,7 @@ if iscell(vsTrial), vsTrial = cell2mat(vsTrial); end % make it an array
 
 %background image processing
 xy0 = vsTrial(1).xy0;
-img0 = vsTrial(1).img0;    
+img0 = vsTrial(1).img0(:,:,1);    
 % mlMask = getImageMask(img0, [0 60], 'CENTRE');
 img0 = imrotate(imadjust(img0), -angXaxis, 'nearest', 'crop');
 

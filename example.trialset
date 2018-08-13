@@ -1,4 +1,7 @@
 vcDir = 'K:\Ottawa\2014b\*_S*'; % or 'E:\2013b\C*' to select each folders starting with C
+%csAnimals = {'C'};
+%csAnimals = {'A','B'};
+%csAnimals = {'C','D'};
 csAnimals = {'A','B','C','D'};
 csDir_excl = {};
 csFile_excl = {};
