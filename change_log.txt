@@ -1,6 +1,10 @@
 Visual Tracker (vistrack) change log
   James Jun, Flatiron Institute
 
+[v0.3.6, 8/14/2018]
+"Import_Track" button works even when no _Track.mat files are found.
+"List files" button works even when no _Track.mat files are found.
+
 [v0.3.5, 8/13/2018]
 "Bar plots"
   Includes bar plots for the pooled probe trials

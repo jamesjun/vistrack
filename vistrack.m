@@ -186,8 +186,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.3.5';
-vcDate = '8/13/2018';
+vcVer = 'v0.3.6';
+vcDate = '8/14/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -1265,6 +1265,11 @@ if ~exist_dir_(get_(S_trialset, 'vcDir'))
     return;
 end
 % S_trialset = load_trialset_(vcFile_trialset);
+csFiles_Track = get_(S_trialset, 'csFiles_Track');
+if isempty(csFiles_Track)
+    errordlg(sprintf('No _Track.mat files are found in "%s".', vcFile_trialset), vcFile_trialset); 
+    return;
+end
 [tiImg, vcType_uniq, vcAnimal_uniq, csDir_trial, csFiles_Track] = ...
     struct_get_(S_trialset, 'tiImg', 'vcType_uniq', 'vcAnimal_uniq', 'csDir_trial', 'csFiles_Track');
 
@@ -1358,7 +1363,7 @@ if ~exist_file_(vcFile_trialset), S_trialset = []; return; end
 P = load_settings_();
 S_trialset = file2struct(vcFile_trialset);
 [csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
-if isempty(csFiles_Track), return; end
+if isempty(csFiles_Track), S_trialset.P=P; return; end
     
 [csDataID, S_trialset_, csFiles_Track]  = get_dataid_(csFiles_Track, get_(S_trialset, 'csAnimals'));
 S_trialset = struct_merge_(S_trialset, S_trialset_);

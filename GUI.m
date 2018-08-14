@@ -121,7 +121,7 @@ function btnLoadVideo_Callback(hObject, eventdata, handles)
 % handles   in: {handles.edit1}
 %           out: {vidfile, vidobj}
 
-vidFname = get(handles.edit1, 'String');
+vidFname = get_str_(handles.edit1);
 if ~exist_file_(vidFname)
     [FileName,PathName,FilterIndex] = uigetfile('*.wmv;*.avi;*.mpg;*.mp4', ...
             'Select video file', vidFname);
@@ -247,7 +247,7 @@ function btnBackground_Callback(hObject, eventdata, handles)
 LOADSETTINGS;
 
 % Get time range from spike2  
-vcFile_adc_ts = get(handles.editADCfileTs, 'String');
+vcFile_adc_ts = get_str_(handles.editADCfileTs);
 fSkipAdc = ~exist_file_(vcFile_adc_ts);
 % if fSkipAdc
 try
@@ -308,7 +308,7 @@ handles.XC_off = XC_off;
 handles.YC_off = YC_off;
 handles.xy_names = S1.xy_names;
 handles.ang_names = S1.ang_names;
-handles.csSettings = get(handles.editSettings, 'String');
+handles.csSettings = get_str_(handles.editSettings);
 set(handles.panelPlot, 'Visible', 'on');
 set(handles.btnSave, 'Enable', 'on');
 guidata(hObject, handles);
@@ -339,7 +339,7 @@ catch
     handles.xyLED = round([vidobj.height, vidobj.width]/2);
 end
 if ~exist('FPS0', 'var'), FPS0 = get(vidobj, 'FrameRate'); end
-ADCTC = load(get(handles.editADCfileTs, 'String'));
+ADCTC = load(get_str_(handles.editADCfileTs));
 disp_adc_title_(ADCTC);
 if ~exist('TLIM0', 'var')
     try
@@ -513,8 +513,8 @@ function pushbutton9_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbutton9 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-writeText('settings_vistrack.m', get(handles.editSettings, 'String'));
-handles.csSettings = get(handles.editSettings, 'String');
+writeText('settings_vistrack.m', get_str_(handles.editSettings));
+handles.csSettings = get_str_(handles.editSettings);
 guidata(hObject, handles);
 
 
@@ -545,7 +545,7 @@ function btnLoadADC_Callback(hObject, eventdata, handles)
 % hObject    handle to btnLoadADC (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-[FileName,PathName,FilterIndex] = uigetfile('*.mat','Select ADC file',get(handles.editADCfile, 'String'));
+[FileName,PathName,FilterIndex] = uigetfile('*.mat','Select ADC file',get_str_(handles.editADCfile));
 if FilterIndex
     try
         handles.ADCfile = fullfile(PathName, FileName);
@@ -855,7 +855,7 @@ function btnLoadADCTS_Callback(hObject, eventdata, handles)
 % hObject    handle to btnLoadADCTS (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-[FileName,PathName,FilterIndex] = uigetfile('*.mat','Select ADC Timestamp',get(handles.editADCfileTs, 'String'));
+[FileName,PathName,FilterIndex] = uigetfile('*.mat','Select ADC Timestamp', get_str_(handles.editADCfileTs));
 if FilterIndex
     try
         handles.ADCfileTs = fullfile(PathName, FileName);
@@ -942,7 +942,7 @@ function btnLoadPrev_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-resultFile = get(handles.editResultFile, 'String');
+resultFile = get_str_(handles.editResultFile);
 if ~exist_file_(resultFile)
     [FileName,PathName,FilterIndex] = uigetfile('*_Track.mat','Select *_Track.mat file', resultFile);
     if ~FilterIndex, return; end
@@ -1173,7 +1173,7 @@ function btnLoadTrialSet_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-vcFile_trialset = get(handles.editTrialSet, 'String');
+vcFile_trialset = get_str_(handles.editTrialSet);
 if ~exist_file_(vcFile_trialset)
     [FileName,PathName,FilterIndex] = uigetfile('*.trialset', ...
             'Select trialset', vcFile_trialset);
@@ -1193,7 +1193,7 @@ function btnEditTrialset_Callback(hObject, eventdata, handles)
 % hObject    handle to btnEditTrialset (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-edit(get(handles.editTrialSet, 'String'));
+edit(get_str_(handles.editTrialSet));
 
 
 % --- Executes on button press in btnLearningCurve.
@@ -1251,9 +1251,17 @@ vistrack('trialset-list', get_str_(handles.editTrialSet));
 
 function vc = get_str_(hObj)
 try
-    vc = get(hObj, 'String');
+    vc = strtrim(get(hObj, 'String'));
 catch
     vc = '';
+end
+
+
+function set_str_(hObj, vc)
+try
+    set(hObj, 'String', strtrim(vc));
+catch
+    ;
 end
 
 
@@ -1384,8 +1392,7 @@ function btnImport_Track_Callback(hObject, eventdata, handles)
 % hObject    handle to btnImport_Track (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-vcFile_trialset = get(handles.editTrialSet, 'String');
-vistrack('trialset-import-track', vcFile_trialset);
+vistrack('trialset-import-track', get_str_(handles.editTrialSet));
 
 
 % --- Executes on button press in btnOpenSheet.
@@ -1393,8 +1400,7 @@ function btnOpenSheet_Callback(hObject, eventdata, handles)
 % hObject    handle to btnOpenSheet (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-vcFile_trialset = get(handles.editTrialSet, 'String');
-vistrack('trialset-googlesheet', vcFile_trialset);
+vistrack('trialset-googlesheet', get_str_(handles.editTrialSet));
 
 
 % --- Executes on button press in btnSummary.
