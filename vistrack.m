@@ -186,8 +186,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.3.6';
-vcDate = '8/14/2018';
+vcVer = 'v0.3.7';
+vcDate = '8/29/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('change_log.txt');
@@ -884,6 +884,13 @@ end
 viCol = find(~any(isnan(mrPath)));
 [mrPath, mrDur] = deal(mrPath(:,viCol), mrDur(:,viCol));
 
+% Export to csv
+vcAnimals = cell2mat(S_trialset.csAnimals);
+vcFile_path = subsFileExt_(vcFile_trialset, sprintf('_pathlen_%s.csv', vcAnimals));
+vcFile_dur = subsFileExt_(vcFile_trialset, sprintf('_duration_%s.csv', vcAnimals));
+csvwrite_(vcFile_path, mrPath', 'Learning-curve path-length (m), [sessions, trials]');
+csvwrite_(vcFile_dur, mrDur', 'Learning-curve: duration (s), [sessions, trials]');
+
 if nargout==0
     % FPS integrity check
     hFig = plot_trialset_img_(S_trialset, trFps); 
@@ -894,6 +901,19 @@ if nargout==0
     subplot 211; errorbar_iqr_(mrPath); ylabel('Dist (m)'); grid on; xlabel('Session #');
     subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');    
 end
+end %func
+
+
+%--------------------------------------------------------------------------
+function vcMsg = csvwrite_(vcFile, var, vcMsg)
+if nargin<3, vcVar = inputname(2); end
+try
+    csvwrite(vcFile, var);
+    vcMsg = sprintf('"%s" wrote to %s', vcMsg, vcFile);
+catch
+    vcMsg = sprintf('Failed to write "s" to %s', vcMsg, vcFile);
+end
+if nargout==0, disp(vcMsg); end
 end %func
 
 
@@ -1636,7 +1656,6 @@ quantLim = get_set_(S_trialset, 'quantLim', [1/8, 7/8]);
     trim_quantile_(vrPath_early, vrPath_late, vrDur_early, vrDur_late, vrSpeed_early, vrSpeed_late, quantLim);
 vcAnimal_use = cell2mat(S_trialset.csAnimals);
 
-
 figure_new_('', ['Early vs Late: ', vcFile_trialset, '; Animals: ', vcAnimal_use]);
 subplot 131;
 bar_mean_sd_({vrPath_early, vrPath_late}, {'Early', 'Late'}, 'Pathlen (m)');
@@ -1648,6 +1667,7 @@ msgbox(sprintf('Early Sessions: %s\nLate Sessions: %s', sprintf('%d ', viEarly),
 
 % Plot probe trials
 S_shape = pool_probe_trialset_(S_trialset, cS_trial);
+
 vcFigName = sprintf('%s; Animals: %s; Probe trials', S_trialset.vcFile_trialset, cell2mat(S_trialset.csAnimals));
 hFig = figure_new_('', vcFigName, [0 .5 .5 .5]); 
 viShapes = 1:6;
@@ -1660,7 +1680,17 @@ subplot 246; bar(S_shape.vtVisit_shape(viShapes)); ylabel('t visit (s)'); set(gc
 subplot 247; bar(S_shape.vtVisit_shape(viShapes) ./ S_shape.vnVisit_shape(viShapes)); ylabel('t per visit (s)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
 subplot 248; bar(S_shape.vpBackward_shape(viShapes)); ylabel('Backward swim prob.'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
 xtickangle(hFig.Children, -30);
-% xtickangle(S_fig.hAx, -20); 
+
+% Export to csv
+vcAnimals = cell2mat(S_trialset.csAnimals);
+vcFile_shapes_probe = subsFileExt_(vcFile_trialset, sprintf('_shapes_probe_%s.csv', vcAnimals));
+[m1_,v2_,v3_,v4_] = struct_get_(S_shape, 'mrDRVS_shape', 'vnVisit_shape', 'vtVisit_shape', 'vpBackward_shape');
+mrStats_shapes = [m1_;v2_;v3_;v2_./v3_;v4_]';
+csStats = {'Sampling density (counts/m)', 'Sampling rate (Hz)', 'Speed (m/s)', ...
+    'Escan density (counts/m)', 'Visit count', 'Visit duration (s)', 'Duration per visit', 'Freq. backward swimming'};
+csvwrite_(vcFile_shapes_probe, mrStats_shapes, 'States by shapes (probe trials); [shapes, stats]');
+fprintf('\tRows: %s\n', sprintf('"%s", ', S_shape.csDist_shape{:}));
+fprintf('\tColumns: %s\n', sprintf('"%s", ', csStats{:}));
 end %func
 
 
@@ -3724,6 +3754,7 @@ function trialset_import_track_(vcFile_trialset)
 
 % Find destination
 S_trialset = load_trialset_(vcFile_trialset);
+if isempty(S_trialset), errordlg('No trials exist', vcFile_trialset); return; end
 vcVidExt = get_set_(S_trialset.P, 'vcVidExt');
 [csFiles_vid, csDir_vid] = find_files_(S_trialset.vcDir, ['*', vcVidExt]);
 

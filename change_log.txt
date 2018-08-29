@@ -1,6 +1,14 @@
 Visual Tracker (vistrack) change log
   James Jun, Flatiron Institute
 
+## 0.3.7 - 8/29/2018
+### Added
+- "Learning curve" button exports .csv file containing path-length and durations
+  - Dimensions: nSessions x nTrials
+- "Bar plots" button exports .csv file containing stats by shapes for the probe trials
+  - Rows: "Triangle Lg", "Triangle Sm", "Square Lg", "Square Sm", "Circle Lg", "Circle Sm", "Food", "Wall", "Not Wall", 
+  - Columns: "Sampling density (counts/m)", "Sampling rate (Hz)", "Speed (m/s)", "Escan density (counts/m)", "Visit count", "Visit duration (s)", "Duration per visit", "Freq. backward swimming", 
+
 [v0.3.6, 8/14/2018]
 "Import_Track" button works even when no _Track.mat files are found.
 "List files" button works even when no _Track.mat files are found.
