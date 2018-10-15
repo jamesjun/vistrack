@@ -53,6 +53,8 @@ switch lower(vcCmd)
     case 'trialset-fixfps', trialset_fixfps_(vcArg1);
     case 'trialset-import-track', trialset_import_track_(vcArg1);
     case {'trialset-googlesheet', 'googlesheet'}, trialset_googlesheet_(vcArg1);
+        
+    case 'trialset-load', trialset_load_(vcArg1);
 
     otherwise, help_();
 end %switch
@@ -144,7 +146,7 @@ warning(S_warning);
 % Copy files
 copyfile_(S_cfg.csFiles_commit, S_cfg.vcDir_commit, '.');
 
-edit_('change_log.txt');
+edit_('changelog.md');
 end %func
 
 
@@ -186,11 +188,11 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.3.7';
-vcDate = '8/29/2018';
+vcVer = 'v0.3.8';
+vcDate = '10/15/2018';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
-    edit_('change_log.txt');
+    edit_('changelog.md');
 end
 end %func
 
@@ -475,7 +477,7 @@ if code ~= 0
     fprintf(2, '\tRun system(''git clone %s.git''\n', repoURL);
     fprintf(2, '\tor install git from https://git-scm.com/downloads\n');  
 else
-    edit('change_log.txt');
+    edit('changelog.md');
 end
 end %func
 
@@ -884,13 +886,6 @@ end
 viCol = find(~any(isnan(mrPath)));
 [mrPath, mrDur] = deal(mrPath(:,viCol), mrDur(:,viCol));
 
-% Export to csv
-vcAnimals = cell2mat(S_trialset.csAnimals);
-vcFile_path = subsFileExt_(vcFile_trialset, sprintf('_pathlen_%s.csv', vcAnimals));
-vcFile_dur = subsFileExt_(vcFile_trialset, sprintf('_duration_%s.csv', vcAnimals));
-csvwrite_(vcFile_path, mrPath', 'Learning-curve path-length (m), [sessions, trials]');
-csvwrite_(vcFile_dur, mrDur', 'Learning-curve: duration (s), [sessions, trials]');
-
 if nargout==0
     % FPS integrity check
     hFig = plot_trialset_img_(S_trialset, trFps); 
@@ -901,19 +896,6 @@ if nargout==0
     subplot 211; errorbar_iqr_(mrPath); ylabel('Dist (m)'); grid on; xlabel('Session #');
     subplot 212; errorbar_iqr_(mrDur); ylabel('Duration (s)'); grid on; xlabel('Sesision #');    
 end
-end %func
-
-
-%--------------------------------------------------------------------------
-function vcMsg = csvwrite_(vcFile, var, vcMsg)
-if nargin<3, vcVar = inputname(2); end
-try
-    csvwrite(vcFile, var);
-    vcMsg = sprintf('"%s" wrote to %s', vcMsg, vcFile);
-catch
-    vcMsg = sprintf('Failed to write "s" to %s', vcMsg, vcFile);
-end
-if nargout==0, disp(vcMsg); end
 end %func
 
 
@@ -1040,10 +1022,10 @@ if isempty(P), P = load_settings_(); end
 if exist_file_(get_(S_trial, 'vcFile_Track'))
     vcFile_cvs = subsFileExt_(S_trial.vcFile_Track, '.csv');
 elseif exist_dir_(vcDir_)
-    vcFile_cvs = subsFileExt_(S_trial.vidFname, '_Track.cvs');
+    vcFile_cvs = subsFileExt_(S_trial.vidFname, '_Track.csv');
 else
     vcFile_Track = get_(S_trial.editResultFile, 'String');
-    vcFile_cvs = strrep(vcFile_Track, '.mat', '.cvs');
+    vcFile_cvs = strrep(vcFile_Track, '.mat', '.csv');
 end
 
 P1 = setfield(P, 'xy0', S_trial.xy0);
@@ -1059,14 +1041,13 @@ if isfield(S_trial, 'mrPos_shape')
     mrPos_shape_meter(:,1:2) = mrPos_shape_meter(:,1:2) * cm_per_grid / 100;
     csvwrite(vcFile_shapes, mrPos_shape_meter);
     vcMsg = sprintf('%sShapes exported to %s\n', vcMsg, vcFile_shapes);
-end
 
-% Export relations between the trajectory and shapes
-if isfield(S_trial, 'mrPos_shape')
     vcFile_relations = strrep(vcFile_cvs, '_Track.csv', '_relations.csv');    
     mrRelations = calc_relations_(mrTraj, mrPos_shape_meter, P1);
     csvwrite(vcFile_relations, mrRelations);
     vcMsg = sprintf('%srelations exported to %s\n', vcMsg, vcFile_relations);
+else
+    fprintf(2, '%s: Shape positions field does not exist.\n', vcFile_cvs);
 end
 
 csShapes = get_(P, 'csShapes');
@@ -1377,14 +1358,27 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function S_trialset = load_trialset_(vcFile_trialset)
-% return [] if vcFile_trialset does not exist or 
-if ~exist_file_(vcFile_trialset), S_trialset = []; return; end
+function [S_trialset, cS_trial] = load_trialset_(vcFile_trialset)
+% Usage
+% -----
+% load_trialset_(myfile.trialset)
+% load_trialset_(myfile_trialset.mat)
+%
+% return [] if vcFile_trialset does not exist
+
 P = load_settings_();
-S_trialset = file2struct(vcFile_trialset);
-[csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
-if isempty(csFiles_Track), S_trialset.P=P; return; end
-    
+if ~exist_file_(vcFile_trialset), S_trialset.P=P; return; end
+if matchFileEnd_(vcFile_trialset, '_trialset.mat')
+    vcFile_trialset_mat_ = vcFile_trialset;
+    vcFile_trialset = strrep(vcFile_trialset, '_trialset.mat', '.trialset');
+    cS_trial = load_mat_(vcFile_trialset, 'cS_trial');
+else
+    S_trialset = file2struct(vcFile_trialset);
+    [csFiles_Track, csDir_trial] = find_files_(S_trialset.vcDir, '*_Track.mat');
+    if isempty(csFiles_Track), S_trialset.P=P; return; end
+    cS_trial = [];
+end
+
 [csDataID, S_trialset_, csFiles_Track]  = get_dataid_(csFiles_Track, get_(S_trialset, 'csAnimals'));
 S_trialset = struct_merge_(S_trialset, S_trialset_);
 [vcAnimal_uniq, vnAnimal_uniq] = unique_(S_trialset.vcAnimal);
@@ -1656,6 +1650,7 @@ quantLim = get_set_(S_trialset, 'quantLim', [1/8, 7/8]);
     trim_quantile_(vrPath_early, vrPath_late, vrDur_early, vrDur_late, vrSpeed_early, vrSpeed_late, quantLim);
 vcAnimal_use = cell2mat(S_trialset.csAnimals);
 
+
 figure_new_('', ['Early vs Late: ', vcFile_trialset, '; Animals: ', vcAnimal_use]);
 subplot 131;
 bar_mean_sd_({vrPath_early, vrPath_late}, {'Early', 'Late'}, 'Pathlen (m)');
@@ -1667,7 +1662,6 @@ msgbox(sprintf('Early Sessions: %s\nLate Sessions: %s', sprintf('%d ', viEarly),
 
 % Plot probe trials
 S_shape = pool_probe_trialset_(S_trialset, cS_trial);
-
 vcFigName = sprintf('%s; Animals: %s; Probe trials', S_trialset.vcFile_trialset, cell2mat(S_trialset.csAnimals));
 hFig = figure_new_('', vcFigName, [0 .5 .5 .5]); 
 viShapes = 1:6;
@@ -1680,17 +1674,7 @@ subplot 246; bar(S_shape.vtVisit_shape(viShapes)); ylabel('t visit (s)'); set(gc
 subplot 247; bar(S_shape.vtVisit_shape(viShapes) ./ S_shape.vnVisit_shape(viShapes)); ylabel('t per visit (s)'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
 subplot 248; bar(S_shape.vpBackward_shape(viShapes)); ylabel('Backward swim prob.'); set(gca,'XTickLabel', S_shape.csDist_shape); grid on;
 xtickangle(hFig.Children, -30);
-
-% Export to csv
-vcAnimals = cell2mat(S_trialset.csAnimals);
-vcFile_shapes_probe = subsFileExt_(vcFile_trialset, sprintf('_shapes_probe_%s.csv', vcAnimals));
-[m1_,v2_,v3_,v4_] = struct_get_(S_shape, 'mrDRVS_shape', 'vnVisit_shape', 'vtVisit_shape', 'vpBackward_shape');
-mrStats_shapes = [m1_;v2_;v3_;v2_./v3_;v4_]';
-csStats = {'Sampling density (counts/m)', 'Sampling rate (Hz)', 'Speed (m/s)', ...
-    'Escan density (counts/m)', 'Visit count', 'Visit duration (s)', 'Duration per visit', 'Freq. backward swimming'};
-csvwrite_(vcFile_shapes_probe, mrStats_shapes, 'States by shapes (probe trials); [shapes, stats]');
-fprintf('\tRows: %s\n', sprintf('"%s", ', S_shape.csDist_shape{:}));
-fprintf('\tColumns: %s\n', sprintf('"%s", ', csStats{:}));
+% xtickangle(S_fig.hAx, -20); 
 end %func
 
 
@@ -2367,10 +2351,16 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function csDataID = getDataID_cS_(cS)
-csDataID = cell(size(cS));
-for i=1:numel(cS)
-    [~,csDataID{i},~] = fileparts(cS{i}.vidFname);
+function [csDataID, viAnimal, vlProbe] = getDataID_cS_(csFiles)
+csDataID = cell(size(csFiles));
+for i=1:numel(csFiles)
+    [~,csDataID{i},~] = fileparts(csFiles{i}.vidFname);
+end
+if nargout>=2
+    viAnimal = cellfun(@(x)x(4)-'A'+1, csDataID);
+end
+if nargout>=3
+    vlProbe = cellfun(@(x)numel(x)>5, csDataID);
 end
 end %func
 
@@ -2408,6 +2398,9 @@ end %func
 
 %--------------------------------------------------------------------------
 function varargout = load_mat_(varargin)
+% Usage
+% [var1, var2, ...], = load_mat_(file_mat, var1_name, var2_name, ...)
+
 if nargin<1, return; end
 vcFile_mat = varargin{1};
 varargout = cell(1, nargout());
@@ -2566,7 +2559,7 @@ end
 
 % default field
 S_cfg.vcDir_commit = get_set_(S_cfg, 'vcDir_commit', 'D:\Dropbox\Git\vistrack\'); 
-S_cfg.csFiles_commit = get_set_(S_cfg, 'csFiles_commit', {'*.m', 'GUI.fig', 'change_log.txt', 'readme.txt', 'example.trialset', 'default.cfg'});
+S_cfg.csFiles_commit = get_set_(S_cfg, 'csFiles_commit', {'*.m', 'GUI.fig', 'changelog.md', 'readme.txt', 'example.trialset', 'default.cfg'});
 S_cfg.csFiles_delete = get_set_(S_cfg, 'csFiles_delete', {'settings_vistrack.m', 'example.trialset', 'R12A2_Track.mat'});
 S_cfg.quantLim = get_set_(S_cfg, 'quantLim', [1/8, 7/8]);
 S_cfg.vcFile_settings = get_set_(S_cfg, 'vcFile_settings', 'settings_vistrack.m');
@@ -2577,7 +2570,8 @@ end %func
 
 %--------------------------------------------------------------------------
 function trialset_exportcsv_(vcFile_trialset)
-h = msgbox_('Exporting the trialset to csv files (This closes automatically)');
+csMsg = {'Exporting the trialset to csv files...(this will close when done)', 'It can take up to several minutes'};
+h = msgbox(csMsg, 'modal');
 % S_trialset = load_trialset_(vcFile_trialset);
 [cS_trial, S_trialset] = loadShapes_trialset_(vcFile_trialset);
 % csFiles_track = S_trialset.csFiles_Track;
@@ -3817,4 +3811,64 @@ function prefix = getSpike2Prefix_(S)
     k = strfind(prefix, '_Ch');
     k=k(end);
     prefix = prefix(1:k-1);    
+end %func
+
+
+%--------------------------------------------------------------------------
+function flag = matchFileEnd_(vcFile, vcEnd)
+flag = ~isempty(regexpi(vcFile, [vcEnd, '$']));
+end %func
+
+
+%--------------------------------------------------------------------------
+function flag = strmatch_start_(vcFile, vcStart)
+flag = ~isempty(regexpi(vcFile, ['^', vcEnd]));
+end %func
+
+
+%--------------------------------------------------------------------------
+function cmr = cellstruct_get_(cS, vcName)
+cmr = cell(size(cS));
+
+for i=1:numel(cS)
+    try
+        cmr{i} = cS{i}.(vcName);
+    catch
+    end
 end
+end %func
+
+
+%--------------------------------------------------------------------------
+function trialset_load_(vcFile)
+% Usage
+% -----
+% trialset_load_(myfile_trialset.mat)
+% trialset_load_(myfile.trialset)
+
+trialset_coordinates_(vcFile);
+
+% % Load trial info
+% if matchFileEnd_(vcFile, '.trialset')
+%     vcFile_trialset_mat = strrep(vcFile, '.trialset', '_trialset.mat');
+% elseif matchFileEnd_(vcFile, '_trialset.mat')
+%     vcFile_trialset_mat = vcFile;
+% else
+%     fprintf(2, 'Must provide .trialset file or _trialset.mat file');
+%     return;
+% end
+% cS_trial = load_mat_(vcFile_trialset_mat, 'cS_trial');
+% cmrPos_shape = cellstruct_get_(cS_trial, 'mrPos_shape');
+% [csDataID, viAnimal, vlProbe] = getDataID_cS_(cS_trial);
+
+% plot shapes
+
+% [csDataID, S_info]  = get_dataid_(cellstruct_get_(cS_trial, 'vidFname'));
+
+% vlFilled = cellfun(@(x)all(any(isnan(x),2)), cmrPos_shape)
+
+% mrPos_all = cell2mat(cellfun(@(x)x(:), cmrPos_shape, 'UniformOutput', 0));
+
+end %func
+
+
