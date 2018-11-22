@@ -22,7 +22,7 @@ function varargout = GUI(varargin)
 
 % Edit the above text to modify the response to help GUI
 
-% Last Modified by GUIDE v2.5 10-Aug-2018 11:32:52
+% Last Modified by GUIDE v2.5 22-Nov-2018 12:52:57
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -1521,11 +1521,62 @@ handles = vistrack('trial-fixsync', handles);
 guidata(hObject, handles);
 
 
-% --- Executes on button press in pushbutton78.
-function pushbutton78_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton78 (see GCBO)
+% --- Executes on button press in btnEncounter.
+function btnEncounter_Callback(hObject, eventdata, handles)
+% hObject    handle to btnEncounter (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+LOADSETTINGS;
+XC = handles.XC;
+YC = handles.YC;
+
+csAns = inputdlg('Frames encountered (last:food)', 'Frames since tracking', 1, {'1 21 100 182'});
+if isempty(csAns), return; end
+viFrames_encounter = str2num(csAns{1});
+
+% show background
+hFig = figure; 
+img_bk = handles.img0;
+mlMask = img_bk==0;
+img_lim = quantile(double(img_bk(~mlMask))/255, [0, 1]);
+img_bk = imadjust(img_bk, img_lim, [0 1]);
+img_bk(mlMask) = 255;
+imshow(img_bk); title('Posture trajectory (color: inverse time duration since last object encounter)');
+
+% compute frames of encounter
+nframes = size(XC,1);
+viFrames = 1:nframes;
+mrDist = bsxfun(@minus, viFrames(:)', viFrames_encounter(:));
+mrDist(mrDist<0) = nan;
+switch 2
+    case 2
+        nColors = 1000;
+        vrColor = log(1 ./ (min(mrDist) + 1));
+        vrColor = vrColor - min(vrColor); % rescale to 0..1
+        vrColor = vrColor / max(vrColor);
+        viColor = max(ceil(vrColor * nColors), 1);
+        mrColor = [zeros(1000, 2), linspace(0, 1, nColors)'];
+    case 1
+        [~, viSrt] = sort(min(mrDist), 'descend');
+        viColor(viSrt) = 1:numel(vrColor);
+        mrColor = hot(numel(vrColor));
+end %switch
+
+resize_figure(hFig, [0,0,.5,1]);
+hold on;
+nxy = size(XC,2);
+TRAJ_STEP = 4;
+for iframe=1:TRAJ_STEP:nframes
+    if iframe < viFrames_encounter(end)
+        vrColor1 = mrColor(viColor(iframe),:);
+    else
+        vrColor1 = [1 0 0];
+    end
+    XI = interp1(2:nxy, XC(iframe,2:end), 2:.1:nxy, 'spline');
+    YI = interp1(2:nxy, YC(iframe,2:end), 2:.1:nxy, 'spline');
+    plot(XI, YI, 'color', vrColor1, 'LineWidth', .5);
+    plot(XI(1), YI(1), '.', 'color', vrColor1, 'MarkerSize', 8);
+end
 
 
 % --- Executes on button press in pushbutton81.

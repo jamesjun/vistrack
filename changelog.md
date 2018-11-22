@@ -2,6 +2,10 @@
 Visual Tracker (vistrack) change log
 James Jun, Flatiron Institute
 
+## [0.3.9] - 2018-11-22
+### Added
+- `Encounter` button is added which plots the trajectory with color-coded time since the last encounter
+
 ## [0.3.8] - 2018-10-15
 ### Changed
 - change_log.txt renamed to changelog.md
