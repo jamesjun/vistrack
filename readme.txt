@@ -15,6 +15,7 @@ To update, run "vistrack update"
 To display help, run "vistrack help"
 
 # Download sample video file
-You need to download a separate large sample video file [R12A2.wmv from here](https://www.dropbox.com/s/wamrg6ha2nk2ik3/R12A2.wmv?dl=1).  
+You need to download a separate large sample video file (R12A2.wmv) from the link below:
+https://www.dropbox.com/s/wamrg6ha2nk2ik3/R12A2.wmv?dl=1
 Note that this video will only open in Windows for now due to Matlab restrictions.
 
