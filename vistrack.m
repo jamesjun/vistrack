@@ -1032,7 +1032,7 @@ vcFile_base = strrep(vcFile_cvs, '_Track.csv', ''); % base name
 
 P1 = setfield(P, 'xy0', S_trial.xy0);
 [mrTraj, mrPosture, mrAngle] = resample_trial_(S_trial, P1);
-csMsg = csvwrite(vcFile_cvs, mrTraj, 'Trajectory');
+csMsg = csvwrite_(vcFile_cvs, mrTraj, 'Trajectory');
 csMsg{end+1} = csvwrite_([vcFile_base, '_posture.csv'], mrPosture, 'Postures');
 csMsg{end+1} = csvwrite_([vcFile_base, '_angle.csv'], mrAngle, 'Angles');
 
