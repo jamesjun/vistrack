@@ -188,8 +188,8 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.3.9';
-vcDate = '11/22/2018';
+vcVer = 'v0.4.0';
+vcDate = '08/19/2019';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
     edit_('changelog.md');
@@ -1013,6 +1013,7 @@ end %func
 
 
 %--------------------------------------------------------------------------
+% 08/19/2019 JJJ: export body posture
 function [vcFile_cvs, mrTraj, vcMsg, csFormat] = trial2csv_(S_trial, P, fPlot)
 if nargin<2, P = []; end
 if nargin<3, fPlot = 0; end
@@ -1027,28 +1028,28 @@ else
     vcFile_Track = get_(S_trial.editResultFile, 'String');
     vcFile_cvs = strrep(vcFile_Track, '.mat', '.csv');
 end
+vcFile_base = strrep(vcFile_cvs, '_Track.csv', ''); % base name
 
 P1 = setfield(P, 'xy0', S_trial.xy0);
-mrTraj = resample_trial_(S_trial, P1);
-csvwrite(vcFile_cvs, mrTraj);
-vcMsg = sprintf('Trajectory exported to %s\n', vcFile_cvs);
+[mrTraj, mrPosture, mrAngle] = resample_trial_(S_trial, P1);
+csMsg = csvwrite(vcFile_cvs, mrTraj, 'Trajectory');
+csMsg{end+1} = csvwrite_([vcFile_base, '_posture.csv'], mrPosture, 'Postures');
+csMsg{end+1} = csvwrite_([vcFile_base, '_angle.csv'], mrAngle, 'Angles');
 
 % Export shape
 if isfield(S_trial, 'mrPos_shape')
-    vcFile_shapes = strrep(vcFile_cvs, '_Track.csv', '_shapes.csv');
+    vcFile_shapes = [vcFile_base, '_shapes.csv'];
     cm_per_grid = get_set_(P, 'cm_per_grid', 5);
-    mrPos_shape_meter = S_trial.mrPos_shape;
+    mrPos_shape_meter = S_trial.mrPos_shape;    
     mrPos_shape_meter(:,1:2) = mrPos_shape_meter(:,1:2) * cm_per_grid / 100;
-    csvwrite(vcFile_shapes, mrPos_shape_meter);
-    vcMsg = sprintf('%sShapes exported to %s\n', vcMsg, vcFile_shapes);
+    csMsg{end+1} = csvwrite_(vcFile_shapes, mrPos_shape_meter, 'Shapes');
 
-    vcFile_relations = strrep(vcFile_cvs, '_Track.csv', '_relations.csv');    
     mrRelations = calc_relations_(mrTraj, mrPos_shape_meter, P1);
-    csvwrite(vcFile_relations, mrRelations);
-    vcMsg = sprintf('%srelations exported to %s\n', vcMsg, vcFile_relations);
+    csMsg{end+1} = csvwrite_([vcFile_base, '_relations.csv'], mrRelations, 'Relations');
 else
     fprintf(2, '%s: Shape positions field does not exist.\n', vcFile_cvs);
 end
+vcMsg = cell2mat(cellfun(@(x)sprintf('%s\n', x), csMsg, 'UniformOutput', 0));
 
 csShapes = get_(P, 'csShapes');
 csFormat = {...
@@ -1067,6 +1068,20 @@ csFormat = {...
     '    X(m): x coordinate of the shape center @ grid frame of reference',
     '    Y(m): y coordinate of the shape center @ grid frame of reference',
     '    A(deg): Shape orientation',
+    '_posture.csv files:', 
+    '  Columns: x1(m), x2(m), x3(m), x4(m), x5(m), y1(m), y2(m), y3(m), y4(m), y5(m)',
+    '    x1(m): x coordinate of the head tip @ grid frame of reference',
+    '    x2(m): x coordinate of the head-mid section @ grid frame of reference',
+    '    x3(m): x coordinate of the mid section @ grid frame of reference',
+    '    x4(m): x coordinate of the mid-tail section @ grid frame of reference',
+    '    x5(m): x coordinate of the tail tip @ grid frame of reference',
+    '    y1(m): y coordinate of the head tip @ grid frame of reference',        
+    '_angles.csv files:', 
+    '  Columns: a_hm(deg), a_tm(deg), a_bb(deg), a_tb(deg)', 
+    '    a_hm(deg): head-mid section orientation (head half of the fish)', 
+    '    a_tm(deg): tail-mid section orientation (tail half of the fish)', 
+    '    a_bb(deg): body bend angle', 
+    '    a_tb(deg): tail bend angle', 
     sprintf('  Rows: %s', sprintf('"%s", ', csShapes{:})),     
     '_relations.csv files:',
     sprintf('  Columns: T(s), D_F(m), A_E(deg), %s', sprintf('L_"%s"(bool), ', csShapes{:})),
@@ -1089,7 +1104,18 @@ end %func
 
 
 %--------------------------------------------------------------------------
-function [mrTXYARDVS_rs, P1] = resample_trial_(S_trial, P)
+function vcMsg = csvwrite_(vcFile, mr, var_name)
+if nargin<3, var_name = ''; end
+if isempty(var_name), var_name = inputname(2); end
+
+csvwrite(vcFile, mr);
+vcMsg = sprintf('%s exported to %s', var_name, vcFile);
+if nargout==0, fprintf('%s\n', vcMsg); end
+end %func
+
+
+%--------------------------------------------------------------------------
+function [mrTXYARDVS_rs, mrPosture_rs, mrAngle_rs] = resample_trial_(S_trial, P)
 % Output
 % -----
 % mrTXYARDV_rs: 
@@ -1098,17 +1124,44 @@ function [mrTXYARDVS_rs, P1] = resample_trial_(S_trial, P)
 
 % smooth the trajectory
 % if fFilter
-fh_filt = @(x)filtPos(x, P.TRAJ_NFILT, 1);
 P1 = setfield(P, 'xy0', S_trial.xy0);
-sRateHz_rs = get_set_(P, 'sRateHz_resample', 100);
-vrT_rs = (S_trial.TC(1):1/sRateHz_rs:S_trial.TC(end))';
-fh_interp = @(x)interp1(S_trial.TC(:), x, vrT_rs);
+fh_filt = @(x)filtPos(x, P.TRAJ_NFILT, 1);
 
-mrXY_pix_2 = [fh_filt(S_trial.XC(:,2)), fh_filt(S_trial.YC(:,2))];
-mrXY_pix_3 = [fh_filt(S_trial.XC(:,3)), fh_filt(S_trial.YC(:,3))];
-mrXY_m_2_rs = fh_interp(pix2cm_(mrXY_pix_2, P1) / 100);
-mrXY_m_3_rs = fh_interp(pix2cm_(mrXY_pix_3, P1) / 100);
-vrA_rs = fh_interp(pix2cm_deg_(S_trial.AC(:,2), P1));
+sRateHz_rs = get_set_(P, 'sRateHz_resample', 100);
+vrT = S_trial.TC(:);
+vrT_rs = (vrT(1):1/sRateHz_rs:vrT(end))';
+fh_interp = @(x)interp1(vrT, x, vrT_rs);
+fh_interp_deg = @(x)mod(interp1(vrT, unwrap(x-180,180), vrT_rs)+180, 360); % input 0..360
+fh_conv = @(x)fh_interp(pix2cm_(fh_filt(x), P1) / 100);
+fh_conv_deg = @(x)fh_interp_deg(pix2cm_deg_(x, P1));
+
+switch 2
+    case 2 %new method, should be the same result
+        mrXY_m_2_rs = fh_conv([S_trial.XC(:,2), S_trial.YC(:,2)]);
+        mrXY_m_3_rs = fh_conv([S_trial.XC(:,3), S_trial.YC(:,3)]);
+        vrA_rs = fh_conv_deg(S_trial.AC(:,2));
+    case 1
+        mrXY_pix_2 = [fh_filt(S_trial.XC(:,2)), fh_filt(S_trial.YC(:,2))];
+        mrXY_pix_3 = [fh_filt(S_trial.XC(:,3)), fh_filt(S_trial.YC(:,3))];
+        mrXY_m_2_rs = fh_interp(pix2cm_(mrXY_pix_2, P1) / 100);
+        mrXY_m_3_rs = fh_interp(pix2cm_(mrXY_pix_3, P1) / 100);
+        vrA_rs = fh_interp_deg(pix2cm_deg_(S_trial.AC(:,2), P1));
+end %switch
+
+if nargout>=2
+    try
+        mrPosture_rs = [fh_conv([S_trial.XC(:,2:end), S_trial.YC(:,2:end)])];
+    catch
+        mrPosture_rs = [];
+    end
+end
+if nargout>=3
+    try
+        mrAngle_rs = fh_conv_deg(S_trial.AC(:,2:end));
+    catch
+        mrAngle_rs = [];
+    end
+end
 
 % add EOD and sampling density
 [vtEodr, vrEodr] = getEodr_adc_(S_trial, P);

@@ -2,6 +2,24 @@
 Visual Tracker (vistrack) change log
 James Jun, Flatiron Institute
 
+## [0.4.0] - 2019-08-19
+### Added
+- `_posture.csv` and `_angles.csv` are exported when `Export CSV` button is pressed.
+  - `_posture.csv` table contains following five feature points (from head to tail direction)
+    '  Columns: x1(m), x2(m), x3(m), x4(m), x5(m), y1(m), y2(m), y3(m), y4(m), y5(m)',
+    '    x1(m): x coordinate of the head tip @ grid frame of reference',
+    '    x2(m): x coordinate of the head-mid section @ grid frame of reference',
+    '    x3(m): x coordinate of the mid section @ grid frame of reference',
+    '    x4(m): x coordinate of the mid-tail section @ grid frame of reference',
+    '    x5(m): x coordinate of the tail tip @ grid frame of reference',
+    '    y1(m): y coordinate of the head tip @ grid frame of reference',        
+  - `_angles.csv` table contains following angles
+    '  Columns: a_hm(deg), a_tm(deg), a_bb(deg), a_tb(deg)', 
+    '    a_hm(deg): head-mid section orientation (head half of the fish)', 
+    '    a_tm(deg): tail-mid section orientation (tail half of the fish)', 
+    '    a_bb(deg): body bend angle', 
+    '    a_tb(deg): tail bend angle'
+
 ## [0.3.9] - 2018-11-22
 ### Added
 - `Encounter` button is added which plots the trajectory with color-coded time since the last encounter
