@@ -188,7 +188,7 @@ end %func
 % 9/29/17 JJJ: Displaying the version number of the program and what's used. #Tested
 function [vcVer, vcDate] = version_()
 if nargin<1, vcFile_prm = ''; end
-vcVer = 'v0.4.0';
+vcVer = 'v0.4.1';
 vcDate = '08/19/2019';
 if nargout==0
     fprintf('%s (%s) installed\n', vcVer, vcDate);
@@ -1032,17 +1032,17 @@ vcFile_base = strrep(vcFile_cvs, '_Track.csv', ''); % base name
 
 P1 = setfield(P, 'xy0', S_trial.xy0);
 [mrTraj, mrPosture, mrAngle] = resample_trial_(S_trial, P1);
-csMsg = csvwrite_(vcFile_cvs, mrTraj, 'Trajectory');
+csMsg = {};
+csMsg{end+1} = csvwrite_(vcFile_cvs, mrTraj, 'Trajectory');
 csMsg{end+1} = csvwrite_([vcFile_base, '_posture.csv'], mrPosture, 'Postures');
 csMsg{end+1} = csvwrite_([vcFile_base, '_angle.csv'], mrAngle, 'Angles');
 
 % Export shape
 if isfield(S_trial, 'mrPos_shape')
-    vcFile_shapes = [vcFile_base, '_shapes.csv'];
     cm_per_grid = get_set_(P, 'cm_per_grid', 5);
     mrPos_shape_meter = S_trial.mrPos_shape;    
     mrPos_shape_meter(:,1:2) = mrPos_shape_meter(:,1:2) * cm_per_grid / 100;
-    csMsg{end+1} = csvwrite_(vcFile_shapes, mrPos_shape_meter, 'Shapes');
+    csMsg{end+1} = csvwrite_([vcFile_base, '_shapes.csv'], mrPos_shape_meter, 'Shapes');
 
     mrRelations = calc_relations_(mrTraj, mrPos_shape_meter, P1);
     csMsg{end+1} = csvwrite_([vcFile_base, '_relations.csv'], mrRelations, 'Relations');
@@ -1068,14 +1068,14 @@ csFormat = {...
     '    X(m): x coordinate of the shape center @ grid frame of reference',
     '    Y(m): y coordinate of the shape center @ grid frame of reference',
     '    A(deg): Shape orientation',
-    '_posture.csv files:', 
-    '  Columns: x1(m), x2(m), x3(m), x4(m), x5(m), y1(m), y2(m), y3(m), y4(m), y5(m)',
+    '_posture.csv files: (stores five points along the body (head to tail)', 
+    '  Columns: x1(m), y1(m), x2(m), y2(m), x3(m), y3(m), x4(m), y4(m), x5(m), y5(m)',
     '    x1(m): x coordinate of the head tip @ grid frame of reference',
+    '    y1(m): y coordinate of the head tip @ grid frame of reference',
     '    x2(m): x coordinate of the head-mid section @ grid frame of reference',
     '    x3(m): x coordinate of the mid section @ grid frame of reference',
     '    x4(m): x coordinate of the mid-tail section @ grid frame of reference',
-    '    x5(m): x coordinate of the tail tip @ grid frame of reference',
-    '    y1(m): y coordinate of the head tip @ grid frame of reference',        
+    '    x5(m): x coordinate of the tail tip @ grid frame of reference',    
     '_angles.csv files:', 
     '  Columns: a_hm(deg), a_tm(deg), a_bb(deg), a_tb(deg)', 
     '    a_hm(deg): head-mid section orientation (head half of the fish)', 
@@ -1107,7 +1107,12 @@ end %func
 function vcMsg = csvwrite_(vcFile, mr, var_name)
 if nargin<3, var_name = ''; end
 if isempty(var_name), var_name = inputname(2); end
-
+if isempty(mr)
+    fprintf(2, 'csvwrite_: Empty matrix, not written.\n'); 
+    vcMsg = '';
+    return; 
+end
+    
 csvwrite(vcFile, mr);
 vcMsg = sprintf('%s exported to %s', var_name, vcFile);
 if nargout==0, fprintf('%s\n', vcMsg); end
@@ -1150,7 +1155,8 @@ end %switch
 
 if nargout>=2
     try
-        mrPosture_rs = [fh_conv([S_trial.XC(:,2:end), S_trial.YC(:,2:end)])];
+        cXY_cam = arrayfun(@(i)[S_trial.XC(:,i), S_trial.YC(:,i)], 2:6, 'UniformOutput',0);
+        mrPosture_rs = cell2mat(cellfun(@(x)fh_conv(x), cXY_cam, 'UniformOutput', 0));
     catch
         mrPosture_rs = [];
     end
@@ -2627,9 +2633,6 @@ csMsg = {'Exporting the trialset to csv files...(this will close when done)', 'I
 h = msgbox(csMsg, 'modal');
 % S_trialset = load_trialset_(vcFile_trialset);
 [cS_trial, S_trialset] = loadShapes_trialset_(vcFile_trialset);
-% csFiles_track = S_trialset.csFiles_Track;
-% csFiles_failed = {};
-% for iFile = 1:numel(csFiles_track)
 for iFile = 1:numel(cS_trial)
     S_ = cS_trial{iFile};
     if isempty(S_), continue; end
